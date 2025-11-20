@@ -1,4 +1,5 @@
 'use client'
+import Header from "../components/Header_first";
 import { useState } from 'react'
 
 export default function RegisterPage() {
@@ -73,6 +74,7 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-gray-500 flex flex-col">
+      <Header />
       <main className="flex-1 flex items-center justify-center px-4">
         <div className="bg-gray-900 rounded-lg shadow-2xl p-8 w-full max-w-sm">
           <h1 className="text-white text-2xl font-light text-center mb-8">

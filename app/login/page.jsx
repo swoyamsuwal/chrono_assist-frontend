@@ -1,8 +1,11 @@
 'use client'
 import Header from "../components/Header_first";
 import { useState } from 'react'
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
+  const router = useRouter();
+
   const [formData, setFormData] = useState({ username: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState(null)
@@ -23,7 +26,6 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      // Fetch CSRF cookie first
       await fetch('http://127.0.0.1:8000/authapp/csrf/', {
         method: 'GET',
         credentials: 'include'
@@ -47,15 +49,18 @@ export default function LoginPage() {
       const data = await response.json()
 
       if (response.ok) {
-        alert(data.message)
+
+        router.push("/dashboard")
+
+        // Reset form
         setFormData({ username: '', password: '' })
       } else {
-        // Show backend error message in UI
-        setErrors({ general: data.error || 'Invalid login' })
+        // Show backend error message
+        setErrors({ general: data.error || "Invalid username or password" })
       }
     } catch (err) {
       console.error(err)
-      setErrors({ general: 'Something went wrong. Try again.' })
+      setErrors({ general: "Something went wrong. Try again." })
     } finally {
       setLoading(false)
     }
@@ -71,7 +76,10 @@ export default function LoginPage() {
           </h1>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {errors?.general && <p className="text-red-500 text-sm text-center">{errors.general}</p>}
+
+            {errors?.general && (
+              <p className="text-red-500 text-sm text-center">{errors.general}</p>
+            )}
 
             <input
               type="text"
@@ -79,7 +87,7 @@ export default function LoginPage() {
               placeholder="Username"
               value={formData.username}
               onChange={handleChange}
-              className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-600 transition"
+              className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3"
             />
 
             <input
@@ -88,7 +96,7 @@ export default function LoginPage() {
               placeholder="Password"
               value={formData.password}
               onChange={handleChange}
-              className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-600 transition"
+              className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3"
             />
 
             <div className="border-t border-gray-700 my-6"></div>
@@ -98,7 +106,7 @@ export default function LoginPage() {
               className="w-full bg-white text-gray-900 font-semibold py-3 rounded-lg hover:bg-gray-100 transition disabled:opacity-50"
               disabled={loading}
             >
-              {loading ? 'Logging in...' : 'Login'}
+              {loading ? "Logging in..." : "Login"}
             </button>
           </form>
         </div>

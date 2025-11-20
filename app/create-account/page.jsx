@@ -1,8 +1,10 @@
 'use client'
 import Header from "../components/Header_first";
 import { useState } from 'react'
+import { useRouter } from "next/navigation";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -26,6 +28,7 @@ export default function RegisterPage() {
     e.preventDefault()
     setErrors(null)
 
+    // Validate password match
     if (formData.password !== formData.confirmPassword) {
       setErrors({ confirmPassword: "Passwords do not match!" })
       return
@@ -33,16 +36,15 @@ export default function RegisterPage() {
 
     setLoading(true)
     try {
-      // 1. Fetch CSRF cookie
+      // Get CSRF cookie
       await fetch('http://127.0.0.1:8000/authapp/csrf/', {
         method: 'GET',
         credentials: 'include'
       })
 
-      // 2. Get token from cookie
       const csrfToken = getCSRFToken()
 
-      // 3. Call register API
+      // Call register API
       const response = await fetch('http://127.0.0.1:8000/authapp/register/', {
         method: 'POST',
         headers: {
@@ -58,9 +60,19 @@ export default function RegisterPage() {
       })
 
       const data = await response.json()
+
       if (response.ok) {
-        alert(data.message)
-        setFormData({ name: '', email: '', password: '', confirmPassword: '' })
+        alert("Account created successfully!")
+
+        // ⭐ Redirect to LOGIN PAGE
+        router.push("/login")
+
+        setFormData({
+          name: '',
+          email: '',
+          password: '',
+          confirmPassword: ''
+        })
       } else {
         setErrors(data)
       }
@@ -82,7 +94,9 @@ export default function RegisterPage() {
           </h1>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {errors?.general && <p className="text-red-500 text-sm text-center">{errors.general}</p>}
+            {errors?.general && (
+              <p className="text-red-500 text-sm text-center">{errors.general}</p>
+            )}
 
             <input
               type="text"
@@ -90,7 +104,7 @@ export default function RegisterPage() {
               placeholder="Name"
               value={formData.name}
               onChange={handleChange}
-              className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-600 transition"
+              className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3"
             />
             {errors?.username && <p className="text-red-500 text-sm">{errors.username}</p>}
 
@@ -100,7 +114,7 @@ export default function RegisterPage() {
               placeholder="Email address"
               value={formData.email}
               onChange={handleChange}
-              className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-600 transition"
+              className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3"
             />
             {errors?.email && <p className="text-red-500 text-sm">{errors.email}</p>}
 
@@ -110,7 +124,7 @@ export default function RegisterPage() {
               placeholder="Password"
               value={formData.password}
               onChange={handleChange}
-              className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-600 transition"
+              className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3"
             />
             {errors?.password && <p className="text-red-500 text-sm">{errors.password}</p>}
 
@@ -120,7 +134,7 @@ export default function RegisterPage() {
               placeholder="Confirm Password"
               value={formData.confirmPassword}
               onChange={handleChange}
-              className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-600 transition"
+              className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3"
             />
             {errors?.confirmPassword && <p className="text-red-500 text-sm">{errors.confirmPassword}</p>}
 

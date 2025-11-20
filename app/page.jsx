@@ -1,4 +1,4 @@
-import Header from "../components/Header_first";
+import Header from "./components/Header_first";
 export default function Body() {
   const ImagePlaceholder = ({ className = "" }) => (
     <div className={`bg-gray-200 border-2 border-gray-400 flex items-center justify-center ${className}`}>

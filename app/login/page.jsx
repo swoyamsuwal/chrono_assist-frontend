@@ -12,7 +12,6 @@ export default function LoginPage() {
 
   const [showOtp, setShowOtp] = useState(false)
   const [otp, setOtp] = useState('')
-  const [otpId, setOtpId] = useState(null)
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -30,14 +29,12 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      // 1) get CSRF
       await fetch('http://127.0.0.1:8000/authapp/csrf/', {
         method: 'GET',
         credentials: 'include'
       })
       const csrfToken = getCSRFToken()
 
-      // 2) call login -> sends OTP
       const response = await fetch('http://127.0.0.1:8000/authapp/login/', {
         method: 'POST',
         headers: {
@@ -54,7 +51,6 @@ export default function LoginPage() {
       const data = await response.json()
 
       if (response.ok && data.otp_required) {
-        setOtpId(data.otp_id)
         setShowOtp(true)
       } else {
         setErrors({ general: data.error || "Invalid email or password" })
@@ -69,7 +65,6 @@ export default function LoginPage() {
 
   const handleVerifyOtp = async (e) => {
     e.preventDefault()
-    if (!otpId) return
     setLoading(true)
     setErrors(null)
 
@@ -84,7 +79,7 @@ export default function LoginPage() {
         },
         credentials: 'include',
         body: JSON.stringify({
-          otp_id: otpId,
+          email: formData.email,
           code: otp
         })
       })

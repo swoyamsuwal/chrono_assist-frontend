@@ -1,134 +1,145 @@
-'use client'
-import Header from "../components/Header_first";
-import { useState } from 'react'
+"use client";
+
+import Header from "../components/Header_second";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
 
-  const [formData, setFormData] = useState({ email: '', password: '' })
-  const [loading, setLoading] = useState(false)
-  const [errors, setErrors] = useState(null)
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState(null);
 
-  const [showOtp, setShowOtp] = useState(false)
-  const [otp, setOtp] = useState('')
+  const [showOtp, setShowOtp] = useState(false);
+  const [otp, setOtp] = useState("");
 
   const handleChange = (e) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
-  }
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const getCSRFToken = () => {
-    const match = document.cookie.split('; ').find(row => row.startsWith('csrftoken'))
-    return match ? match.split('=')[1] : null
-  }
+    const match = document.cookie.split("; ").find((row) =>
+      row.startsWith("csrftoken")
+    );
+    return match ? match.split("=")[1] : null;
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setErrors(null)
-    setLoading(true)
+    e.preventDefault();
+    setErrors(null);
+    setLoading(true);
 
     try {
-      await fetch('http://127.0.0.1:8000/authapp/csrf/', {
-        method: 'GET',
-        credentials: 'include'
-      })
-      const csrfToken = getCSRFToken()
+      await fetch("http://127.0.0.1:8000/authapp/csrf/", {
+        method: "GET",
+        credentials: "include",
+      });
+      const csrfToken = getCSRFToken();
 
-      const response = await fetch('http://127.0.0.1:8000/authapp/login/', {
-        method: 'POST',
+      const response = await fetch("http://127.0.0.1:8000/authapp/login/", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrfToken || ''
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken || "",
         },
-        credentials: 'include',
+        credentials: "include",
         body: JSON.stringify({
           email: formData.email,
-          password: formData.password
-        })
-      })
+          password: formData.password,
+        }),
+      });
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (response.ok && data.otp_required) {
-        setShowOtp(true)
+        setShowOtp(true);
       } else {
-        setErrors({ general: data.error || "Invalid email or password" })
+        setErrors({ general: data.error || "Invalid email or password" });
       }
     } catch (err) {
-      console.error(err)
-      setErrors({ general: "Something went wrong. Try again." })
+      console.error(err);
+      setErrors({ general: "Something went wrong. Try again." });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleVerifyOtp = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setErrors(null)
+    e.preventDefault();
+    setLoading(true);
+    setErrors(null);
 
     try {
-      const csrfToken = getCSRFToken()
+      const csrfToken = getCSRFToken();
 
-      const response = await fetch('http://127.0.0.1:8000/authapp/verify-otp/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrfToken || ''
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          email: formData.email,
-          code: otp
-        })
-      })
+      const response = await fetch(
+        "http://127.0.0.1:8000/authapp/verify-otp/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfToken || "",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            email: formData.email,
+            code: otp,
+          }),
+        }
+      );
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (response.ok) {
-        // STEP 3: get JWT using username=email (because backend sets username=email on register)
-        try {
-          const jwtRes = await fetch('http://127.0.0.1:8000/api/token/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              username: formData.email,    // username == email by backend design
-              password: formData.password,
-            }),
-          })
-
-          const jwtData = await jwtRes.json()
-          if (jwtRes.ok) {
-            localStorage.setItem('accessToken', jwtData.access)
-            localStorage.setItem('refreshToken', jwtData.refresh)
-          } else {
-            console.error('JWT login failed:', jwtData)
-            setErrors({ general: 'JWT login failed' })
-            setLoading(false)
-            return
-          }
-        } catch (err) {
-          console.error('Error getting JWT:', err)
-          setErrors({ general: 'Error getting JWT' })
-          setLoading(false)
-          return
+        // 1) Save user so Header can read it
+        if (data.user) {
+          localStorage.setItem("user", JSON.stringify(data.user));
         }
 
-        setShowOtp(false)
-        setOtp('')
-        setFormData({ email: '', password: '' })
-        router.push('/dashboard')
+        // 2) Get JWT
+        try {
+          const jwtRes = await fetch("http://127.0.0.1:8000/api/token/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              username: formData.email,
+              password: formData.password,
+            }),
+          });
+
+          const jwtData = await jwtRes.json();
+          if (jwtRes.ok) {
+            localStorage.setItem("accessToken", jwtData.access);
+            localStorage.setItem("refreshToken", jwtData.refresh);
+          } else {
+            console.error("JWT login failed:", jwtData);
+            setErrors({ general: "JWT login failed" });
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error("Error getting JWT:", err);
+          setErrors({ general: "Error getting JWT" });
+          setLoading(false);
+          return;
+        }
+
+        setShowOtp(false);
+        setOtp("");
+        setFormData({ email: "", password: "" });
+        router.push("/dashboard");
       } else {
-        setErrors({ general: data.error || "Invalid OTP" })
+        setErrors({ general: data.error || "Invalid OTP" });
       }
     } catch (err) {
-      console.error(err)
-      setErrors({ general: "Something went wrong. Try again." })
+      console.error(err);
+      setErrors({ general: "Something went wrong. Try again." });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gray-500 flex flex-col">
@@ -141,7 +152,9 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {errors?.general && (
-              <p className="text-red-500 text-sm text-center">{errors.general}</p>
+              <p className="text-red-500 text-sm text-center">
+                {errors.general}
+              </p>
             )}
 
             <input
@@ -176,7 +189,9 @@ export default function LoginPage() {
           {showOtp && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
               <div className="bg-gray-900 p-6 rounded-lg w-full max-w-xs">
-                <h2 className="text-white text-lg mb-4 text-center">Enter OTP</h2>
+                <h2 className="text-white text-lg mb-4 text-center">
+                  Enter OTP
+                </h2>
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <input
                     type="text"
@@ -207,5 +222,5 @@ export default function LoginPage() {
         </div>
       </main>
     </div>
-  )
+  );
 }

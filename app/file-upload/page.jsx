@@ -17,6 +17,9 @@ export default function FileUploadDashboard() {
   const [initialLoading, setInitialLoading] = useState(true);
   const inputRef = useRef(null);
 
+  // NEW: user state
+  const [user, setUser] = useState(null);
+
   const API_BASE = "http://127.0.0.1:8000";
 
   function getAccessToken() {
@@ -24,6 +27,19 @@ export default function FileUploadDashboard() {
       ? localStorage.getItem("accessToken")
       : null;
   }
+
+  // NEW: load user from localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem("user");
+    if (stored) {
+      try {
+        setUser(JSON.parse(stored));
+      } catch {
+        setUser(null);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const token = getAccessToken();
@@ -363,7 +379,9 @@ export default function FileUploadDashboard() {
                     <td className="py-4 px-3">
                       {formatBytes(f.size)}
                     </td>
-                    <td className="py-4 px-3">You</td>
+                    <td className="py-4 px-3">
+                      {user ? user.username : "You are"}
+                    </td>
                   </tr>
                 ))
               )}

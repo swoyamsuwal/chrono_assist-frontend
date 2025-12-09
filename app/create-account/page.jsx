@@ -28,7 +28,6 @@ export default function RegisterPage() {
     e.preventDefault()
     setErrors(null)
 
-    // Validate password match
     if (formData.password !== formData.confirmPassword) {
       setErrors({ confirmPassword: "Passwords do not match!" })
       return
@@ -36,7 +35,6 @@ export default function RegisterPage() {
 
     setLoading(true)
     try {
-      // Get CSRF cookie
       await fetch('http://127.0.0.1:8000/authapp/csrf/', {
         method: 'GET',
         credentials: 'include'
@@ -44,12 +42,11 @@ export default function RegisterPage() {
 
       const csrfToken = getCSRFToken()
 
-      // Call register API
       const response = await fetch('http://127.0.0.1:8000/authapp/register/', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRFToken': csrfToken
+          'X-CSRFToken': csrfToken || ''
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -63,10 +60,7 @@ export default function RegisterPage() {
 
       if (response.ok) {
         alert("Account created successfully!")
-
-        // ⭐ Redirect to LOGIN PAGE
         router.push("/login")
-
         setFormData({
           name: '',
           email: '',

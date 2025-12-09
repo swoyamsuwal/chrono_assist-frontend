@@ -87,6 +87,34 @@ export default function LoginPage() {
       const data = await response.json()
 
       if (response.ok) {
+        // STEP 3: get JWT using username=email (because backend sets username=email on register)
+        try {
+          const jwtRes = await fetch('http://127.0.0.1:8000/api/token/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: formData.email,    // username == email by backend design
+              password: formData.password,
+            }),
+          })
+
+          const jwtData = await jwtRes.json()
+          if (jwtRes.ok) {
+            localStorage.setItem('accessToken', jwtData.access)
+            localStorage.setItem('refreshToken', jwtData.refresh)
+          } else {
+            console.error('JWT login failed:', jwtData)
+            setErrors({ general: 'JWT login failed' })
+            setLoading(false)
+            return
+          }
+        } catch (err) {
+          console.error('Error getting JWT:', err)
+          setErrors({ general: 'Error getting JWT' })
+          setLoading(false)
+          return
+        }
+
         setShowOtp(false)
         setOtp('')
         setFormData({ email: '', password: '' })

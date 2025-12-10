@@ -17,7 +17,6 @@ export default function FileUploadDashboard() {
   const [initialLoading, setInitialLoading] = useState(true);
   const inputRef = useRef(null);
 
-  // NEW: user state
   const [user, setUser] = useState(null);
 
   const API_BASE = "http://127.0.0.1:8000";
@@ -28,7 +27,6 @@ export default function FileUploadDashboard() {
       : null;
   }
 
-  // NEW: load user from localStorage
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem("user");
@@ -69,6 +67,7 @@ export default function FileUploadDashboard() {
             size: d.file_size,
             mime: d.mime_type,
             createdAt: d.created_at,
+            fileUrl: d.file_url, // MinIO URL
             uploadedToAI: false,
           }))
         );
@@ -143,6 +142,7 @@ export default function FileUploadDashboard() {
               size: result.file_size,
               mime: result.mime_type,
               createdAt: result.created_at,
+              fileUrl: result.file_url, // <-- Add URL immediately
               uploadedToAI: false,
             },
             ...prev,
@@ -301,7 +301,20 @@ export default function FileUploadDashboard() {
                     className="bg-gray-700/30 border-t border-gray-700"
                   >
                     <td className="py-4 px-3">
-                      <div className="font-medium">{f.name}</div>
+                      <div className="font-medium">
+                        {f.fileUrl ? (
+                          <a
+                            href={f.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline hover:text-blue-400"
+                          >
+                            {f.name}
+                          </a>
+                        ) : (
+                          f.name
+                        )}
+                      </div>
                       <div className="text-xs text-gray-400">
                         {f.mime || "—"}
                       </div>
@@ -319,24 +332,9 @@ export default function FileUploadDashboard() {
                           fill="none"
                           stroke="currentColor"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M19 7L5 7"
-                          />
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M10 11v6m4-6v6"
-                          />
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M9 7V6a2 2 0 012-2h2a2 2 0 012 2v1"
-                          />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7L5 7" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 11v6m4-6v6" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7V6a2 2 0 012-2h2a2 2 0 012 2v1" />
                         </svg>
                       </button>
                     </td>

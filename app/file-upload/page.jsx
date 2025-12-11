@@ -15,6 +15,7 @@ export default function FileUploadDashboard() {
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [embeddingLoadingId, setEmbeddingLoadingId] = useState(null);
   const inputRef = useRef(null);
 
   const [user, setUser] = useState(null);
@@ -67,8 +68,8 @@ export default function FileUploadDashboard() {
             size: d.file_size,
             mime: d.mime_type,
             createdAt: d.created_at,
-            fileUrl: d.file_url, // MinIO URL
-            uploadedToAI: false,
+            fileUrl: d.file_url,
+            uploadedToAI: d.is_embedded ?? false, // backend value
           }))
         );
       } catch (e) {
@@ -142,8 +143,8 @@ export default function FileUploadDashboard() {
               size: result.file_size,
               mime: result.mime_type,
               createdAt: result.created_at,
-              fileUrl: result.file_url, // <-- Add URL immediately
-              uploadedToAI: false,
+              fileUrl: result.file_url,
+              uploadedToAI: result.is_embedded ?? false,
             },
             ...prev,
           ]);
@@ -186,12 +187,47 @@ export default function FileUploadDashboard() {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   }
 
-  function toggleUploadToAI(id) {
-    setFiles((prev) =>
-      prev.map((f) =>
-        f.id === id ? { ...f, uploadedToAI: !f.uploadedToAI } : f
-      )
-    );
+  async function handleUploadToAI(id, alreadyEmbedded) {
+    if (alreadyEmbedded) {
+      // do nothing if it's already embedded
+      return;
+    }
+
+    const token = getAccessToken();
+    if (!token) {
+      console.error("No access token; user not logged in");
+      return;
+    }
+
+    try {
+      setEmbeddingLoadingId(id);
+      const res = await fetch(`${API_BASE}/file_upload/embed_file/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id }),
+      });
+
+      if (!res.ok) {
+        console.error("Embedding failed");
+        return;
+      }
+
+      const data = await res.json();
+      console.log("Embedding response:", data);
+
+      setFiles((prev) =>
+        prev.map((f) =>
+          f.id === id ? { ...f, uploadedToAI: true } : f
+        )
+      );
+    } catch (e) {
+      console.error("Error embedding file:", e);
+    } finally {
+      setEmbeddingLoadingId(null);
+    }
   }
 
   return (
@@ -295,65 +331,44 @@ export default function FileUploadDashboard() {
                   </td>
                 </tr>
               ) : (
-                files.map((f) => (
-                  <tr
-                    key={f.id}
-                    className="bg-gray-700/30 border-t border-gray-700"
-                  >
-                    <td className="py-4 px-3">
-                      <div className="font-medium">
-                        {f.fileUrl ? (
-                          <a
-                            href={f.fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline hover:text-blue-400"
-                          >
-                            {f.name}
-                          </a>
-                        ) : (
-                          f.name
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-400">
-                        {f.mime || "—"}
-                      </div>
-                    </td>
+                files.map((f) => {
+                  const isEmbedded = !!f.uploadedToAI;
+                  const isLoading = embeddingLoadingId === f.id;
+                  const disabled = isEmbedded || isLoading;
 
-                    <td className="py-4 px-3 text-center">
-                      <button
-                        onClick={() => handleDelete(f.id)}
-                        title="Delete"
-                        className="p-2 rounded-full bg-red-600 hover:bg-red-500 transition"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
+                  return (
+                    <tr
+                      key={f.id}
+                      className="bg-gray-700/30 border-t border-gray-700"
+                    >
+                      <td className="py-4 px-3">
+                        <div className="font-medium">
+                          {f.fileUrl ? (
+                            <a
+                              href={f.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline hover:text-blue-400"
+                            >
+                              {f.name}
+                            </a>
+                          ) : (
+                            f.name
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {f.mime || "—"}
+                        </div>
+                      </td>
+
+                      <td className="py-4 px-3 text-center">
+                        <button
+                          onClick={() => handleDelete(f.id)}
+                          title="Delete"
+                          className="p-2 rounded-full bg-red-600 hover:bg-red-500 transition"
                         >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7L5 7" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 11v6m4-6v6" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 7V6a2 2 0 012-2h2a2 2 0 012 2v1" />
-                        </svg>
-                      </button>
-                    </td>
-
-                    <td className="py-4 px-3 text-center">
-                      <button
-                        onClick={() => toggleUploadToAI(f.id)}
-                        className={
-                          "p-2 rounded " +
-                          (f.uploadedToAI
-                            ? "bg-green-600"
-                            : "bg-gray-700 hover:bg-gray-600")
-                        }
-                      >
-                        {f.uploadedToAI ? (
-                          <span className="text-xs">✓ AI</span>
-                        ) : (
                           <svg
-                            className="w-5 h-5 text-gray-100"
+                            className="w-4 h-4"
                             viewBox="0 0 24 24"
                             fill="none"
                             stroke="currentColor"
@@ -362,26 +377,55 @@ export default function FileUploadDashboard() {
                               strokeLinecap="round"
                               strokeLinejoin="round"
                               strokeWidth="2"
-                              d="M12 5v14m7-7H5"
+                              d="M19 7L5 7"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M10 11v6m4-6v6"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth="2"
+                              d="M9 7V6a2 2 0 012-2h2a2 2 0 012 2v1"
                             />
                           </svg>
-                        )}
-                      </button>
-                    </td>
+                        </button>
+                      </td>
 
-                    <td className="py-4 px-3">
-                      {f.createdAt
-                        ? new Date(f.createdAt).toLocaleDateString()
-                        : "—"}
-                    </td>
-                    <td className="py-4 px-3">
-                      {formatBytes(f.size)}
-                    </td>
-                    <td className="py-4 px-3">
-                      {user ? user.username : "You are"}
-                    </td>
-                  </tr>
-                ))
+                      <td className="py-4 px-3 text-center">
+                        <button
+                          onClick={() => handleUploadToAI(f.id, isEmbedded)}
+                          disabled={disabled}
+                          className={
+                            "px-3 py-2 rounded text-xs " +
+                            (isEmbedded
+                              ? "bg-green-600 text-white"
+                              : "bg-gray-700 hover:bg-gray-600 text-gray-100")
+                          }
+                        >
+                          {isEmbedded
+                            ? "Upload to AI"
+                            : isLoading
+                            ? "Embedding..."
+                            : "Upload to AI"}
+                        </button>
+                      </td>
+
+                      <td className="py-4 px-3">
+                        {f.createdAt
+                          ? new Date(f.createdAt).toLocaleDateString()
+                          : "—"}
+                      </td>
+                      <td className="py-4 px-3">{formatBytes(f.size)}</td>
+                      <td className="py-4 px-3">
+                        {user ? user.username : "You are"}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

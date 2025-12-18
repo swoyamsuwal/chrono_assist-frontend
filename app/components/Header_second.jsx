@@ -45,7 +45,6 @@ export default function Header() {
       console.error("Logout error:", e);
     }
 
-    // Clear frontend auth
     if (typeof window !== "undefined") {
       localStorage.removeItem("user");
       localStorage.removeItem("accessToken");
@@ -54,6 +53,11 @@ export default function Header() {
     setUser(null);
     setIsUserMenuOpen(false);
     router.push("/login");
+  };
+
+  const handleProfileClick = () => {
+    setIsUserMenuOpen(false);
+    router.push("/profile"); // or whatever route you want
   };
 
   return (
@@ -104,7 +108,16 @@ export default function Header() {
             </button>
 
             {isUserMenuOpen && (
-              <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg border border-gray-200 z-50">
+              <div
+                className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg border border-gray-200 z-50"
+                onMouseLeave={() => setIsUserMenuOpen(false)}
+              >
+                <button
+                  onClick={handleProfileClick}
+                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  Profile
+                </button>
                 <button
                   onClick={handleLogout}
                   className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -127,8 +140,7 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Mobile Menu Panel (unchanged for now) */}
-      {/* ... keep your existing mobile menu, or later add logout there too ... */}
+      {/* Mobile menu unchanged... */}
     </header>
   );
 }

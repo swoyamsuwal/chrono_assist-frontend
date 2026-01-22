@@ -1,10 +1,11 @@
 'use client'
 import Header from "../components/Header_first";
-import { useState } from 'react'
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -14,14 +15,12 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState(null)
 
+  // Get follow_user_id from URL params
+  const followUserId = searchParams.get('follow_user_id');
+
   const handleChange = e => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
-  }
-
-  const getCSRFToken = () => {
-    const match = document.cookie.split('; ').find(row => row.startsWith('csrftoken'))
-    return match ? match.split('=')[1] : null
   }
 
   const handleSubmit = async e => {
@@ -29,30 +28,21 @@ export default function RegisterPage() {
     setErrors(null)
 
     if (formData.password !== formData.confirmPassword) {
-      setErrors({ confirmPassword: "Passwords do not match!" })
+      setErrors({ confirmPassword: "Passwords don't match!" })
       return
     }
 
     setLoading(true)
     try {
-      await fetch('http://127.0.0.1:8000/authapp/csrf/', {
-        method: 'GET',
-        credentials: 'include'
-      })
-
-      const csrfToken = getCSRFToken()
-
       const response = await fetch('http://127.0.0.1:8000/authapp/register/', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrfToken || ''
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
           username: formData.name,
           email: formData.email,
-          password: formData.password
+          password: formData.password,
+          user_type: 'main',
         })
       })
 
@@ -61,18 +51,13 @@ export default function RegisterPage() {
       if (response.ok) {
         alert("Account created successfully!")
         router.push("/login")
-        setFormData({
-          name: '',
-          email: '',
-          password: '',
-          confirmPassword: ''
-        })
+        setFormData({ name: '', email: '', password: '', confirmPassword: '' })
       } else {
         setErrors(data)
       }
     } catch (err) {
       console.error(err)
-      setErrors({ general: "Something went wrong. Try again." })
+      setErrors({ general: "Something went wrong." })
     } finally {
       setLoading(false)
     }
@@ -84,7 +69,7 @@ export default function RegisterPage() {
       <main className="flex-1 flex items-center justify-center px-4">
         <div className="bg-gray-900 rounded-lg shadow-2xl p-8 w-full max-w-sm">
           <h1 className="text-white text-2xl font-light text-center mb-8">
-            Log in or sign up
+            Sign up
           </h1>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -99,6 +84,7 @@ export default function RegisterPage() {
               value={formData.name}
               onChange={handleChange}
               className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3"
+              required
             />
             {errors?.username && <p className="text-red-500 text-sm">{errors.username}</p>}
 
@@ -109,6 +95,7 @@ export default function RegisterPage() {
               value={formData.email}
               onChange={handleChange}
               className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3"
+              required
             />
             {errors?.email && <p className="text-red-500 text-sm">{errors.email}</p>}
 
@@ -119,6 +106,7 @@ export default function RegisterPage() {
               value={formData.password}
               onChange={handleChange}
               className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3"
+              required
             />
             {errors?.password && <p className="text-red-500 text-sm">{errors.password}</p>}
 
@@ -129,17 +117,16 @@ export default function RegisterPage() {
               value={formData.confirmPassword}
               onChange={handleChange}
               className="w-full bg-gray-800 text-gray-400 placeholder-gray-600 rounded-lg px-4 py-3"
+              required
             />
             {errors?.confirmPassword && <p className="text-red-500 text-sm">{errors.confirmPassword}</p>}
-
-            <div className="border-t border-gray-700 my-6"></div>
 
             <button
               type="submit"
               className="w-full bg-white text-gray-900 font-semibold py-3 rounded-lg hover:bg-gray-100 transition disabled:opacity-50"
               disabled={loading}
             >
-              {loading ? "Submitting..." : "Continue"}
+              {loading ? "Creating..." : "Create Account"}
             </button>
           </form>
         </div>

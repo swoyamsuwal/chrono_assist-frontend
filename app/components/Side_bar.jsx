@@ -9,6 +9,7 @@ const sidebarItems = [
   { name: "File Upload", href: "/file-upload" },
   { name: "Prompt", href: "/prompt" },
   { name: "Mail", href: "/mail" },
+  { name: "Calendar", href: "/calendar" },
 ];
 
 export default function SideBarLayout({ children }) {

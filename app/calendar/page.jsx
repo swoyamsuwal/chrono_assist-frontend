@@ -18,6 +18,24 @@ export default function CalendarPage() {
   const [user, setUser] = useState(null);
   const calendarRef = useRef();
 
+  // 1. Setup Axios instance with Interceptor for Auth
+  const api = axios.create({
+    baseURL: API_BASE,
+  });
+
+  api.interceptors.request.use(
+    (config) => {
+      if (typeof window !== "undefined") {
+        const token = localStorage.getItem("accessToken");
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+      }
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+
   // Load user from localStorage
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -50,7 +68,8 @@ export default function CalendarPage() {
   async function fetchEvents() {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/api/calendar/events/`);
+      // Use 'api' instead of 'axios' to include Token
+      const res = await api.get(`/api/calendar/events/`);
       setEvents(res.data.map(evToFullCalendar));
       setMessage("");
     } catch (err) {
@@ -63,7 +82,8 @@ export default function CalendarPage() {
 
   async function handleConnect() {
     try {
-      const res = await axios.get(`${API_BASE}/api/calendar/google/login/`);
+      // Use 'api' so backend knows WHO is connecting
+      const res = await api.get(`/api/calendar/google/login/`);
       const auth_url = res.data.auth_url;
       window.location.href = auth_url;
     } catch (err) {
@@ -77,8 +97,11 @@ export default function CalendarPage() {
     setLoading(true);
     setMessage("Processing AI prompt...");
     try {
-      const res = await axios.post(`${API_BASE}/api/calendar/ai-prompt/`, { prompt });
-      setMessage(JSON.stringify(res.data, null, 2));
+      const res = await api.post(`/api/calendar/ai-prompt/`, { prompt });
+      // Format the result nicely
+      const action = res.data.action;
+      const status = res.data.status;
+      setMessage(`Success: ${action} (${status})`);
       setPrompt("");
       await fetchEvents();
     } catch (err) {
@@ -94,7 +117,7 @@ export default function CalendarPage() {
     if (!confirm(`Delete event "${ev.title}"?`)) return;
     setLoading(true);
     try {
-      await axios.delete(`${API_BASE}/api/calendar/events/${ev.id}/delete/`);
+      await api.delete(`/api/calendar/events/${ev.id}/delete/`);
       setMessage("Event deleted.");
       fetchEvents();
     } catch (err) {
@@ -126,12 +149,24 @@ export default function CalendarPage() {
           </button>
         </div>
 
+        {/* Message / Error Display */}
+        {message && (
+            <div className={`p-3 rounded ${message.toLowerCase().includes("error") || message.toLowerCase().includes("failed") ? "bg-red-900/50 text-red-200 border border-red-700" : "bg-green-900/50 text-green-200 border border-green-700"}`}>
+                {message}
+            </div>
+        )}
+
         {/* Calendar */}
         <div className="bg-gray-800 rounded-lg p-4 shadow-md border border-gray-700">
           {loading && <div className="text-gray-400 mb-2">Loading events...</div>}
           <FullCalendar
             plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
+            headerToolbar={{
+              left: 'prev,next today',
+              center: 'title',
+              right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            }}
             events={events}
             eventClick={handleEventClick}
             ref={calendarRef}
@@ -147,7 +182,7 @@ export default function CalendarPage() {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             rows={4}
-            placeholder={`Try: "Create meeting with Alice tomorrow at 3pm about product demo"\nOr: "Update event called 'Demo' to next Monday at 2pm"`}
+            placeholder={`Try: "Create meeting with Alice tomorrow at 3pm about product demo"`}
             className="w-full px-3 py-2 rounded bg-gray-700 text-white border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           <div className="flex gap-2">
@@ -159,7 +194,6 @@ export default function CalendarPage() {
               {loading ? "Processing..." : "Send Prompt"}
             </button>
           </div>
-          <pre className="bg-gray-900 p-3 rounded text-sm text-white whitespace-pre-wrap">{message}</pre>
         </div>
       </div>
     </SideBarLayout>

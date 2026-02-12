@@ -20,10 +20,8 @@ const PERMISSIONS_UI = [
   { label: "Permission: View", feature: "permission", action: "view" },
   { label: "Permission: Create role", feature: "permission", action: "create" },
   { label: "Permission: Create account", feature: "permission", action: "create" },
-  { label: "Permission: Update role", feature: "permission", action: "update" },
-  { label: "Permission: Update account", feature: "permission", action: "update" },
-  { label: "Permission: Delete role", feature: "permission", action: "delete" },
-  { label: "Permission: Delete account", feature: "permission", action: "delete" },
+  { label: "Permission: Update role/account", feature: "permission", action: "update" },
+  { label: "Permission: Delete role/account", feature: "permission", action: "delete" },
   // Files Upload
   { label: "Files: View", feature: "files", action: "view" },
   { label: "Files: Upload", feature: "files", action: "create" },

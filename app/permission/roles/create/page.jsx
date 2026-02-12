@@ -11,21 +11,32 @@ function getAccessToken() {
 }
 
 const PERMISSIONS_UI = [
-  // Files
+   // Tasks
+  { label: "Tasks: View", feature: "tasks", action: "view" },
+  { label: "Tasks: Create", feature: "tasks", action: "create" },
+  { label: "Tasks: Update", feature: "tasks", action: "update" },
+  { label: "Tasks: Delete", feature: "tasks", action: "delete" },
+  // Permission
+  { label: "Permission: View", feature: "permission", action: "view" },
+  { label: "Permission: Create role", feature: "permission", action: "create" },
+  { label: "Permission: Create account", feature: "permission", action: "create" },
+  { label: "Permission: Update role", feature: "permission", action: "update" },
+  { label: "Permission: Update account", feature: "permission", action: "update" },
+  { label: "Permission: Delete role", feature: "permission", action: "delete" },
+  { label: "Permission: Delete account", feature: "permission", action: "delete" },
+  // Files Upload
   { label: "Files: View", feature: "files", action: "view" },
   { label: "Files: Upload", feature: "files", action: "create" },
   { label: "Files: Delete", feature: "files", action: "delete" },
   { label: "Files: Embed", feature: "files", action: "execute" },
   // Prompt
   { label: "Prompt (RAG): Use", feature: "prompt", action: "execute" },
-  // Tasks
-  { label: "Tasks: View", feature: "tasks", action: "view" },
-  { label: "Tasks: Create", feature: "tasks", action: "create" },
-  { label: "Tasks: Update", feature: "tasks", action: "update" },
-  { label: "Tasks: Delete", feature: "tasks", action: "delete" },
   //Mail
   { label: "Mail: View", feature: "mail", action: "view" },
   { label: "Mail: Send", feature: "mail", action: "execute" },
+  //Calender
+  { label: "Calendar: Connect Google Calendar", feature: "calendar", action: "execute" },
+  { label: "Calendar: Send prompt to calendar", feature: "calendar", action: "execute" },
 ];
 
 export default function CreateRolePage() {

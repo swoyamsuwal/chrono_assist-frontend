@@ -23,6 +23,9 @@ const PERMISSIONS_UI = [
   { label: "Tasks: Create", feature: "tasks", action: "create" },
   { label: "Tasks: Update", feature: "tasks", action: "update" },
   { label: "Tasks: Delete", feature: "tasks", action: "delete" },
+  //Mail
+  { label: "Mail: View", feature: "mail", action: "view" },
+  { label: "Mail: Send", feature: "mail", action: "execute" },
 ];
 
 export default function CreateRolePage() {

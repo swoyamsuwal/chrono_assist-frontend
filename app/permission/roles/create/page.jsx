@@ -11,11 +11,18 @@ function getAccessToken() {
 }
 
 const PERMISSIONS_UI = [
+  // Files
   { label: "Files: View", feature: "files", action: "view" },
   { label: "Files: Upload", feature: "files", action: "create" },
   { label: "Files: Delete", feature: "files", action: "delete" },
   { label: "Files: Embed", feature: "files", action: "execute" },
+  // Prompt
   { label: "Prompt (RAG): Use", feature: "prompt", action: "execute" },
+  // Tasks
+  { label: "Tasks: View", feature: "tasks", action: "view" },
+  { label: "Tasks: Create", feature: "tasks", action: "create" },
+  { label: "Tasks: Update", feature: "tasks", action: "update" },
+  { label: "Tasks: Delete", feature: "tasks", action: "delete" },
 ];
 
 export default function CreateRolePage() {

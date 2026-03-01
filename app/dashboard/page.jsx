@@ -17,7 +17,6 @@ function statusTitle(status) {
 }
 
 function toDatetimeLocalValue(date) {
-  // Format: YYYY-MM-DDTHH:mm for <input type="datetime-local">
   const pad = (n) => String(n).padStart(2, "0");
   const yyyy = date.getFullYear();
   const mm = pad(date.getMonth() + 1);
@@ -28,12 +27,36 @@ function toDatetimeLocalValue(date) {
 }
 
 function datetimeLocalToISO(value) {
-  // value: "YYYY-MM-DDTHH:mm"
-  // Convert to ISO string using local time -> Date -> ISO (UTC).
-  // This avoids backend parsing issues and always sends a standard format.
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
+}
+
+function AssignedUserPill({ user }) {
+  const name = user?.username ?? "—";
+  const url = user?.profile_picture_url;
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-gray-400">Assigned:</span>
+
+      {url ? (
+        <img
+          src={url}
+          alt={name}
+          className="w-6 h-6 rounded-full object-cover border border-gray-600"
+          onError={(e) => {
+            // fallback if MinIO URL blocked/403/etc.
+            e.currentTarget.style.display = "none";
+          }}
+        />
+      ) : (
+        <div className="w-6 h-6 rounded-full bg-gray-700 border border-gray-600" />
+      )}
+
+      <span className="text-gray-200">{name}</span>
+    </div>
+  );
 }
 
 export default function TasksBoardPage() {
@@ -41,23 +64,20 @@ export default function TasksBoardPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // Users for dropdown (from /authapp/list_users/)
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
   const [usersErr, setUsersErr] = useState("");
 
-  // modal state
   const [openCreate, setOpenCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState("");
 
-  // form state
   const [form, setForm] = useState({
     title: "",
     short_description: "",
     full_description: "",
-    deadline: "", // datetime-local
-    assigned_to: "", // selected user id string
+    deadline: "",
+    assigned_to: "",
   });
 
   const columns = useMemo(() => [STATUS.TASK, STATUS.IN_PROGRESS, STATUS.FINISHED], []);
@@ -83,7 +103,6 @@ export default function TasksBoardPage() {
     setUsersErr("");
     setUsersLoading(true);
     try {
-      // This endpoint already filters by follow_group in your backend.
       const data = await apiFetch("/authapp/list_users/");
       setUsers(Array.isArray(data) ? data : []);
     } catch (e) {
@@ -122,15 +141,9 @@ export default function TasksBoardPage() {
 
   function openCreateModal() {
     setCreateErr("");
-    // Set a sensible default deadline (now + 1 hour) so picker works immediately
     const d = new Date();
     d.setHours(d.getHours() + 1);
-
-    setForm((p) => ({
-      ...p,
-      deadline: p.deadline || toDatetimeLocalValue(d),
-    }));
-
+    setForm((p) => ({ ...p, deadline: p.deadline || toDatetimeLocalValue(d) }));
     setOpenCreate(true);
   }
 
@@ -144,15 +157,8 @@ export default function TasksBoardPage() {
     setCreateErr("");
 
     const deadlineISO = datetimeLocalToISO(form.deadline);
-    if (!deadlineISO) {
-      setCreateErr("Invalid deadline date/time.");
-      return;
-    }
-
-    if (!form.assigned_to) {
-      setCreateErr("Please select a user to assign.");
-      return;
-    }
+    if (!deadlineISO) return setCreateErr("Invalid deadline date/time.");
+    if (!form.assigned_to) return setCreateErr("Please select a user to assign.");
 
     setCreating(true);
     try {
@@ -162,20 +168,13 @@ export default function TasksBoardPage() {
           title: form.title,
           short_description: form.short_description,
           full_description: form.full_description,
-          deadline: deadlineISO, // send standard ISO
+          deadline: deadlineISO,
           assigned_to: Number(form.assigned_to),
         },
       });
 
       setOpenCreate(false);
-      setForm({
-        title: "",
-        short_description: "",
-        full_description: "",
-        deadline: "",
-        assigned_to: "",
-      });
-
+      setForm({ title: "", short_description: "", full_description: "", deadline: "", assigned_to: "" });
       await loadBoard();
     } catch (e2) {
       setCreateErr(e2.message || "Failed to create task");
@@ -189,7 +188,6 @@ export default function TasksBoardPage() {
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-white">Tasks Board</h1>
-
           <button
             onClick={openCreateModal}
             className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition font-medium"
@@ -246,8 +244,8 @@ export default function TasksBoardPage() {
                           </button>
                         </div>
 
-                        <div className="text-xs text-gray-400 mt-3 flex gap-4">
-                          <div>Assigned: {t.assigned_to?.username ?? "—"}</div>
+                        <div className="text-xs text-gray-400 mt-3 flex flex-col gap-2">
+                          <AssignedUserPill user={t.assigned_to} />
                           <div>Deadline: {t.deadline ? new Date(t.deadline).toLocaleString() : "—"}</div>
                         </div>
 
@@ -260,7 +258,6 @@ export default function TasksBoardPage() {
                               Move to TASK
                             </button>
                           )}
-
                           {col !== STATUS.IN_PROGRESS && (
                             <button
                               onClick={() => moveTask(t, STATUS.IN_PROGRESS)}
@@ -269,7 +266,6 @@ export default function TasksBoardPage() {
                               Move to IN_PROGRESS
                             </button>
                           )}
-
                           {col !== STATUS.FINISHED && (
                             <button
                               onClick={() => moveTask(t, STATUS.FINISHED)}
@@ -289,7 +285,7 @@ export default function TasksBoardPage() {
         )}
       </div>
 
-      {/* Create Task Modal */}
+      {/* Create Task Modal (unchanged except uses users list) */}
       {openCreate ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/60"
@@ -300,7 +296,6 @@ export default function TasksBoardPage() {
           <div className="w-full max-w-2xl bg-gray-800 rounded-lg border border-gray-700 p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="text-lg font-semibold text-white">Create Task</div>
-
               <button
                 onClick={closeCreateModal}
                 className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-100 rounded transition"
@@ -311,20 +306,13 @@ export default function TasksBoardPage() {
             </div>
 
             {createErr ? (
-              <div className="bg-red-500/20 border border-red-500 text-red-300 p-4 rounded-lg mb-4">
-                {createErr}
-              </div>
+              <div className="bg-red-500/20 border border-red-500 text-red-300 p-4 rounded-lg mb-4">{createErr}</div>
             ) : null}
 
             {usersErr ? (
               <div className="bg-yellow-500/15 border border-yellow-600 text-yellow-200 p-3 rounded-lg mb-4">
                 {usersErr}{" "}
-                <button
-                  type="button"
-                  onClick={loadUsers}
-                  className="ml-2 underline hover:text-white"
-                  disabled={usersLoading}
-                >
+                <button type="button" onClick={loadUsers} className="ml-2 underline hover:text-white" disabled={usersLoading}>
                   Retry
                 </button>
               </div>
@@ -336,7 +324,7 @@ export default function TasksBoardPage() {
                 <input
                   value={form.title}
                   onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white"
                   required
                   disabled={creating}
                 />
@@ -347,7 +335,7 @@ export default function TasksBoardPage() {
                 <input
                   value={form.short_description}
                   onChange={(e) => setForm((p) => ({ ...p, short_description: e.target.value }))}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white"
                   required
                   disabled={creating}
                 />
@@ -358,7 +346,7 @@ export default function TasksBoardPage() {
                 <textarea
                   value={form.full_description}
                   onChange={(e) => setForm((p) => ({ ...p, full_description: e.target.value }))}
-                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition min-h-[120px]"
+                  className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white min-h-[120px]"
                   required
                   disabled={creating}
                 />
@@ -371,14 +359,11 @@ export default function TasksBoardPage() {
                     type="datetime-local"
                     value={form.deadline}
                     onChange={(e) => setForm((p) => ({ ...p, deadline: e.target.value }))}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
+                    className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white"
                     required
                     disabled={creating}
                     step="60"
                   />
-                  <div className="text-xs text-gray-400 mt-1">
-                    Tip: pick date first, then time. (We send ISO to backend.)
-                  </div>
                 </div>
 
                 <div>
@@ -386,7 +371,7 @@ export default function TasksBoardPage() {
                   <select
                     value={form.assigned_to}
                     onChange={(e) => setForm((p) => ({ ...p, assigned_to: e.target.value }))}
-                    className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
+                    className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white"
                     required
                     disabled={creating || usersLoading}
                   >
@@ -397,16 +382,13 @@ export default function TasksBoardPage() {
                       </option>
                     ))}
                   </select>
-                  {users.length === 0 && !usersLoading ? (
-                    <div className="text-xs text-gray-400 mt-1">No users found in your group.</div>
-                  ) : null}
                 </div>
               </div>
 
               <button
                 type="submit"
                 disabled={creating}
-                className="w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl font-semibold disabled:opacity-50"
               >
                 {creating ? "Creating..." : "Create Task"}
               </button>

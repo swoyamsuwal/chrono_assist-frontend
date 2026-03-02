@@ -1,0 +1,83 @@
+/* White theme polish for FullCalendar */
+.fc {
+  --fc-border-color: #e2e8f0;          /* slate-200 */
+  --fc-page-bg-color: #ffffff;
+  --fc-neutral-bg-color: #f8fafc;      /* slate-50 */
+  --fc-today-bg-color: rgba(99,102,241,0.08); /* indigo */
+  --fc-event-border-color: transparent;
+  --fc-event-text-color: #0f172a;      /* slate-900 */
+}
+
+.fc .fc-toolbar-title {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.fc .fc-button {
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #0f172a;
+  padding: 0.45rem 0.75rem;
+}
+
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background: #0f172a;
+  border-color: #0f172a;
+  color: #fff;
+}
+
+/* Highlight days that have any event */
+.fc-daygrid-day.has-event-day {
+  background: rgba(253, 230, 138, 0.35); /* light yellow */
+}
+
+.fc-daygrid-day.has-event-day:hover {
+  background: rgba(253, 230, 138, 0.55);
+}
+
+/* Tooltip (simple, no extra libs) */
+.fc-event[data-fc-tooltip] {
+  position: relative;
+}
+
+.fc-event[data-fc-tooltip]:hover::after {
+  content: attr(data-fc-tooltip);
+  position: absolute;
+  z-index: 50;
+  left: 0;
+  top: -36px;
+  white-space: nowrap;
+  background: rgba(15, 23, 42, 0.95);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  box-shadow: 0 10px 25px rgba(2, 6, 23, 0.25);
+}
+
+/* ================================
+   Month view: black bar events
+   ================================ */
+
+/* The bar you see instead of the title text */
+.fc .fc-black-bar {
+  height: 6px;
+  width: 100%;
+  background: #0f172a; /* black-ish */
+  border-radius: 9999px;
+}
+
+/* Remove default event "pill" visuals in month cells so only the bar shows */
+.fc .fc-daygrid-event {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  cursor: pointer;
+}
+
+/* Small spacing so multiple bars stack nicely */
+.fc .fc-daygrid-event-harness {
+  margin-top: 2px;
+}

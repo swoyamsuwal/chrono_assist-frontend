@@ -314,10 +314,11 @@ export default function SideBarLayout({ children }) {
           className={`
             flex-1 ml-16 transition-[margin-left] duration-300 ease-in-out
             ${isOpen ? "lg:ml-56" : "lg:ml-16"}
-            w-full
+            w-full min-w-0
           `}
         >
-          <div className="max-w-6xl mx-auto px-4 py-6">{children}</div>
+          {/* IMPORTANT: removed max-w-6xl mx-auto so children can take full width */}
+          <div className="w-full px-3 sm:px-5 lg:px-8 py-6">{children}</div>
         </main>
       </div>
     </div>

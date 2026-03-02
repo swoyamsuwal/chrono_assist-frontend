@@ -33,15 +33,15 @@ function PresetCard({ title, description, icon, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="group text-left rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md hover:border-slate-300 transition"
+      className="group text-left rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md hover:border-slate-300 transition"
     >
-      <div className="flex items-start gap-4">
-        <div className="h-12 w-12 rounded-2xl bg-slate-50 ring-1 ring-slate-200 grid place-items-center text-slate-700 group-hover:text-indigo-700 group-hover:ring-indigo-100 group-hover:bg-indigo-50 transition">
+      <div className="flex items-start gap-3">
+        <div className="h-10 w-10 rounded-2xl bg-slate-50 ring-1 ring-slate-200 grid place-items-center text-slate-700 group-hover:text-indigo-700 group-hover:ring-indigo-100 group-hover:bg-indigo-50 transition">
           {icon}
         </div>
         <div className="min-w-0">
-          <div className="text-base font-semibold text-slate-900">{title}</div>
-          <div className="mt-1 text-sm text-slate-500">{description}</div>
+          <div className="text-sm font-semibold text-slate-900">{title}</div>
+          <div className="mt-0.5 text-xs text-slate-500">{description}</div>
         </div>
       </div>
     </button>
@@ -181,22 +181,19 @@ export default function CalendarPage() {
       .filter((e) => e._startMs && e._startMs >= now - 5 * 60 * 1000)
       .sort((a, b) => a._startMs - b._startMs);
 
-    return list.slice(0, 8);
+    return list.slice(0, 6);
   }, [events]);
 
   function setPreset(text) {
     setPrompt(text);
-    const el = document.getElementById("ai-prompt");
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    // no scrolling needed anymore
   }
 
-  // FullCalendar custom render: month view => black bar only (no text) [page:1]
+  // React connector supports returning JSX for eventContent [web:3]
   function renderEventContent(arg) {
     if (arg.view.type === "dayGridMonth") {
       return <div className="fc-black-bar" aria-label={arg.event.title} />;
     }
-
-    // Keep normal-ish title in week/day views
     return (
       <>
         <b>{arg.timeText}</b>
@@ -207,14 +204,15 @@ export default function CalendarPage() {
 
   return (
     <SideBarLayout>
-      <div className="w-full">
+      {/* Whole screen layout */}
+      <div className="w-full h-[calc(100vh-24px)] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 mb-6">
+        <div className="flex items-start justify-between gap-4 mb-3 shrink-0">
           <div className="min-w-0">
-            <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">
+            <h1 className="text-xl md:text-2xl font-semibold text-slate-900">
               Calendar & Meetings
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-0.5 text-xs text-slate-500">
               Schedule and manage your meetings
             </p>
           </div>
@@ -222,15 +220,9 @@ export default function CalendarPage() {
           <div className="shrink-0 flex items-center gap-2">
             <button
               onClick={handleConnect}
-              className="rounded-xl bg-white border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-900 hover:bg-slate-50 transition"
+              className="rounded-xl bg-white border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-900 hover:bg-slate-50 transition"
             >
               Connect Google Calendar
-            </button>
-            <button
-              onClick={fetchEvents}
-              className="rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition"
-            >
-              Refresh
             </button>
           </div>
         </div>
@@ -239,7 +231,7 @@ export default function CalendarPage() {
         {message ? (
           <div
             className={[
-              "mb-6 rounded-2xl border px-4 py-3 text-sm",
+              "mb-3 rounded-2xl border px-4 py-2 text-xs shrink-0",
               message.toLowerCase().includes("error") ||
               message.toLowerCase().includes("failed")
                 ? "border-red-200 bg-red-50 text-red-700"
@@ -250,226 +242,193 @@ export default function CalendarPage() {
           </div>
         ) : null}
 
-        {/* Main 2-column area */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Calendar card */}
-          <div className="lg:col-span-4 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-              <div className="text-base font-semibold text-slate-900">
-                Calendar
+        {/* 2 rows inside the viewport: top (calendar+upcoming) + bottom (prompt) */}
+        <div className="flex-1 min-h-0 grid grid-rows-[1fr_auto] gap-4">
+          {/* Top row */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0">
+            {/* Calendar widget */}
+            <div className="lg:col-span-4 rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-0">
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-900">Calendar</div>
+                <div className="text-xs text-slate-500">{loading ? "Loading…" : " "}</div>
               </div>
-              <div className="text-sm text-slate-500">
-                {loading ? "Loading…" : " "}
-              </div>
-            </div>
 
-            <div className="p-4">
-              <FullCalendar
-                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                initialView="dayGridMonth"
-                headerToolbar={{
-                  left: "prev,next today",
-                  center: "title",
-                  right: "dayGridMonth,timeGridWeek,timeGridDay",
-                }}
-                events={events}
-                ref={calendarRef}
-                height="auto"
-                eventDisplay="block"
-                eventClick={handleEventClick}
-                dayCellClassNames={(arg) => {
-                  const key = arg.dateStr;
-                  return eventDaysSet.has(key) ? ["has-event-day"] : [];
-                }}
-                eventDidMount={(info) => {
-                  // Tooltip text shown on hover via CSS below
-                  info.el.setAttribute("data-fc-tooltip", info.event.title);
-                }}
-                eventContent={renderEventContent} // custom rendering (black bar in month) [page:1]
-              />
-            </div>
-          </div>
-
-          {/* Upcoming meetings card */}
-          <div className="lg:col-span-8 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-              <div className="text-base font-semibold text-slate-900">
-                Upcoming Meetings
-              </div>
-              <div className="text-sm text-slate-500">
-                {upcoming.length} upcoming
-              </div>
-            </div>
-
-            <div className="p-5 space-y-4">
-              {upcoming.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center">
-                  <div className="text-sm font-semibold text-slate-900">
-                    No upcoming meetings
-                  </div>
-                  <div className="mt-1 text-sm text-slate-500">
-                    Connect your Google Calendar or create an event using the
-                    prompt below.
-                  </div>
+              <div className="p-3">
+                <div className="fc-apple-widget">
+                  <FullCalendar
+                    plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                    initialView="dayGridMonth"
+                    headerToolbar={{ left: "prev,next", center: "title", right: "" }}
+                    fixedWeekCount={true}
+                    showNonCurrentDates={true}
+                    dayHeaders={true}
+                    weekends={true}
+                    events={events}
+                    ref={calendarRef}
+                    height="auto"
+                    eventDisplay="block"
+                    eventClick={handleEventClick}
+                    dayCellClassNames={(arg) => {
+                      const key = arg.dateStr;
+                      return eventDaysSet.has(key) ? ["has-event-day"] : [];
+                    }}
+                    eventDidMount={(info) => {
+                      info.el.setAttribute("data-fc-tooltip", info.event.title);
+                    }}
+                    eventContent={renderEventContent}
+                  />
                 </div>
-              ) : (
-                upcoming.map((e) => {
-                  const when = fmtTimeRange(e.start, e.end);
-                  const dateLabel = e.start
-                    ? new Date(e.start).toLocaleDateString([], {
-                        month: "short",
-                        day: "2-digit",
-                      })
-                    : "";
+              </div>
+            </div>
 
-                  return (
-                    <div
-                      key={e.id}
-                      className="rounded-2xl border border-slate-200 bg-white px-5 py-4 hover:shadow-md transition"
-                    >
-                      <div className="flex items-start justify-between gap-3">
+            {/* Upcoming (scroll only inside this box if needed) */}
+            <div className="lg:col-span-8 rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-0 flex flex-col">
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
+                <div className="text-sm font-semibold text-slate-900">Upcoming</div>
+                <div className="text-xs text-slate-500">{upcoming.length} upcoming</div>
+              </div>
+
+              <div className="p-4 space-y-3 overflow-auto min-h-0">
+                {upcoming.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center">
+                    <div className="text-sm font-semibold text-slate-900">
+                      No upcoming meetings
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      Create events using the prompt below.
+                    </div>
+                  </div>
+                ) : (
+                  upcoming.map((e) => {
+                    const when = fmtTimeRange(e.start, e.end);
+                    return (
+                      <div
+                        key={e.id}
+                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 hover:shadow-md transition"
+                      >
                         <div className="min-w-0">
-                          <div className="text-base font-semibold text-slate-900 truncate">
+                          <div className="text-sm font-semibold text-slate-900 truncate">
                             {e.title}
                           </div>
-                          <div className="mt-1 text-sm text-slate-500">
+                          <div className="mt-1 text-xs text-slate-500">
                             {when ? `🕒 ${when}` : " "}
                           </div>
-                          <div className="mt-1 text-sm text-slate-500 truncate">
-                            {e.extendedProps?.conferenceData?.conferenceSolution
-                              ?.name ||
+                          <div className="mt-1 text-xs text-slate-500 truncate">
+                            {e.extendedProps?.conferenceData?.conferenceSolution?.name ||
                               e.extendedProps?.location ||
                               " "}
                           </div>
                         </div>
-
-                        <span className="shrink-0 rounded-full bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100 px-3 py-1 text-xs font-semibold">
-                          {dateLabel || "Soon"}
-                        </span>
                       </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Prompt section */}
-        <div
-          id="ai-prompt"
-          className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden"
-        >
-          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-            <div>
-              <div className="text-base font-semibold text-slate-900">
-                Prompt
-              </div>
-              <div className="text-sm text-slate-500">
-                Tell AI what you want. You can edit the preset text.
+                    );
+                  })
+                )}
               </div>
             </div>
-
-            <button
-              onClick={sendPrompt}
-              disabled={loading || !prompt.trim()}
-              className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition"
-            >
-              {loading ? "Processing..." : "Send"}
-            </button>
           </div>
 
-          <div className="p-5">
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={4}
-              placeholder={`Try: "Create meeting with Alice tomorrow at 3pm about product demo"`}
-              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300"
-            />
+          {/* Bottom row: Prompt always visible */}
+          <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">Prompt</div>
+                <div className="text-xs text-slate-500">
+                  Tell AI what you want. You can edit the preset text.
+                </div>
+              </div>
+
+              <button
+                onClick={sendPrompt}
+                disabled={loading || !prompt.trim()}
+                className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition"
+              >
+                {loading ? "Processing..." : "Send"}
+              </button>
+            </div>
+
+            <div className="p-4 grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+              <div className="xl:col-span-7">
+                <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  rows={3}
+                  placeholder={`Try: "Create a reminder on [date] at [time]: [reminder text]."`}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300"
+                />
+              </div>
+
+              <div className="xl:col-span-5 grid grid-cols-1 md:grid-cols-3 xl:grid-cols-1 gap-3">
+                <PresetCard
+                  title="Event"
+                  description='Template: "Create event on ..."'
+                  icon={
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+                      <path
+                        d="M8 2v3M16 2v3M4 7h16M6 11h4M6 15h4M14 11h4M14 15h4M6 19h12"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                  }
+                  onClick={() =>
+                    setPreset(
+                      "Create event on [date] at [time] titled [title]. Notes: [details]."
+                    )
+                  }
+                />
+
+                <PresetCard
+                  title="Meeting"
+                  description='Template: "There is a meeting..."'
+                  icon={
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+                      <path
+                        d="M16 11c1.66 0 3-1.57 3-3.5S17.66 4 16 4s-3 1.57-3 3.5S14.34 11 16 11Z"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      />
+                      <path
+                        d="M6 11c1.66 0 3-1.57 3-3.5S7.66 4 6 4 3 5.57 3 7.5 4.34 11 6 11Z"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      />
+                    </svg>
+                  }
+                  onClick={() =>
+                    setPreset(
+                      "There is a meeting about [topic] on [date] at [time] with [attendees]. Location/Link: [zoom/google meet]."
+                    )
+                  }
+                />
+
+                <PresetCard
+                  title="Reminder"
+                  description="Quick reminder"
+                  icon={
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+                      <path
+                        d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2h16l-2-2Z"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  }
+                  onClick={() =>
+                    setPreset("Create a reminder on [date] at [time]: [reminder text].")
+                  }
+                />
+              </div>
+            </div>
           </div>
-        </div>
-
-        {/* Presets */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          <PresetCard
-            title="Event"
-            description='Sets a template like: "Create event on ..."'
-            icon={
-              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none">
-                <path
-                  d="M8 2v3M16 2v3M4 7h16M6 11h4M6 15h4M14 11h4M14 15h4M6 19h12"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            }
-            onClick={() =>
-              setPreset(
-                "Create event on [date] at [time] titled [title]. Notes: [details]."
-              )
-            }
-          />
-
-          <PresetCard
-            title="Meeting"
-            description='Sets a template like: "There a meeting about ... on ..."'
-            icon={
-              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none">
-                <path
-                  d="M16 11c1.66 0 3-1.57 3-3.5S17.66 4 16 4s-3 1.57-3 3.5S14.34 11 16 11Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M6 11c1.66 0 3-1.57 3-3.5S7.66 4 6 4 3 5.57 3 7.5 4.34 11 6 11Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M6 13c-2.21 0-4 1.34-4 3v2h8v-2c0-1.66-1.79-3-4-3Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M16 13c-2.21 0-4 1.34-4 3v2h10v-2c0-1.66-1.79-3-4-3Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                />
-              </svg>
-            }
-            onClick={() =>
-              setPreset(
-                "There is a meeting about company growth on 12 Dec at 2:00 PM with [attendees]. Location/Link: [zoom/google meet]."
-              )
-            }
-          />
-
-          <PresetCard
-            title="Reminder"
-            description="Quickly draft a reminder event."
-            icon={
-              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none">
-                <path
-                  d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2h16l-2-2Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            }
-            onClick={() =>
-              setPreset("Create a reminder on [date] at [time]: [reminder text].")
-            }
-          />
         </div>
       </div>
     </SideBarLayout>
   );
 }
+
+
+
+
+

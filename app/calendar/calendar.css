@@ -1,43 +1,101 @@
-/* White theme polish for FullCalendar */
-.fc {
-  --fc-border-color: #e2e8f0;          /* slate-200 */
+/* ========== Widget-like compact FullCalendar ========== */
+
+.fc-apple-widget .fc {
+  --fc-border-color: rgba(226, 232, 240, 0.9);
   --fc-page-bg-color: #ffffff;
-  --fc-neutral-bg-color: #f8fafc;      /* slate-50 */
-  --fc-today-bg-color: rgba(99,102,241,0.08); /* indigo */
+  --fc-neutral-bg-color: #f8fafc;
+  --fc-today-bg-color: rgba(239, 68, 68, 0.10); /* subtle red-ish like Apple */
   --fc-event-border-color: transparent;
-  --fc-event-text-color: #0f172a;      /* slate-900 */
+  --fc-event-text-color: #0f172a;
+
+  font-size: 12px; /* smaller overall */
 }
 
-.fc .fc-toolbar-title {
+.fc-apple-widget .fc .fc-toolbar {
+  margin-bottom: 8px;
+}
+
+.fc-apple-widget .fc .fc-toolbar-title {
+  font-size: 18px; /* smaller month text */
   font-weight: 700;
   color: #0f172a;
 }
 
-.fc .fc-button {
-  border-radius: 0.75rem;
+.fc-apple-widget .fc .fc-button {
+  border-radius: 9999px;
   border: 1px solid #e2e8f0;
   background: #fff;
   color: #0f172a;
-  padding: 0.45rem 0.75rem;
+  padding: 0.25rem 0.55rem;
+  font-size: 12px;
+  line-height: 1;
 }
 
-.fc .fc-button-primary:not(:disabled).fc-button-active,
-.fc .fc-button-primary:not(:disabled):active {
-  background: #0f172a;
-  border-color: #0f172a;
+.fc-apple-widget .fc .fc-col-header-cell-cushion {
+  padding: 4px 0;
+  font-size: 11px;
+  color: #64748b; /* slate-500 */
+  font-weight: 600;
+}
+
+.fc-apple-widget .fc .fc-daygrid-day-number {
+  padding: 6px;
+  font-size: 12px;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.fc-apple-widget .fc .fc-daygrid-day-frame {
+  min-height: 44px; /* compact cell height */
+}
+
+.fc-apple-widget .fc .fc-daygrid-day-top {
+  justify-content: center; /* centered numbers like widget */
+}
+
+/* Optional: circle highlight for "today" number */
+.fc-apple-widget .fc .fc-day-today .fc-daygrid-day-number {
+  background: #ef4444;
   color: #fff;
+  border-radius: 9999px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  margin: 4px auto 0;
+  padding: 0;
 }
 
-/* Highlight days that have any event */
-.fc-daygrid-day.has-event-day {
-  background: rgba(253, 230, 138, 0.35); /* light yellow */
+/* Keep your highlighted event days (but lighter + nicer) */
+.fc-apple-widget .fc-daygrid-day.has-event-day {
+  background: rgba(15, 23, 42, 0.03);
+}
+.fc-apple-widget .fc-daygrid-day.has-event-day:hover {
+  background: rgba(15, 23, 42, 0.06);
 }
 
-.fc-daygrid-day.has-event-day:hover {
-  background: rgba(253, 230, 138, 0.55);
+/* ========== Black bar event style (smaller, more horizontal) ========== */
+.fc-apple-widget .fc .fc-black-bar {
+  height: 4px;
+  width: 70%;
+  margin: 0 auto;      /* centered bar */
+  background: #0f172a;
+  border-radius: 9999px;
+  opacity: 0.95;
 }
 
-/* Tooltip (simple, no extra libs) */
+.fc-apple-widget .fc .fc-daygrid-event {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  cursor: pointer;
+}
+
+.fc-apple-widget .fc .fc-daygrid-event-harness {
+  margin-top: 2px;
+}
+
+/* Tooltip (your existing tooltip, keep it) */
 .fc-event[data-fc-tooltip] {
   position: relative;
 }
@@ -46,7 +104,8 @@
   content: attr(data-fc-tooltip);
   position: absolute;
   z-index: 50;
-  left: 0;
+  left: 50%;
+  transform: translateX(-50%);
   top: -36px;
   white-space: nowrap;
   background: rgba(15, 23, 42, 0.95);
@@ -55,29 +114,4 @@
   border-radius: 10px;
   font-size: 12px;
   box-shadow: 0 10px 25px rgba(2, 6, 23, 0.25);
-}
-
-/* ================================
-   Month view: black bar events
-   ================================ */
-
-/* The bar you see instead of the title text */
-.fc .fc-black-bar {
-  height: 6px;
-  width: 100%;
-  background: #0f172a; /* black-ish */
-  border-radius: 9999px;
-}
-
-/* Remove default event "pill" visuals in month cells so only the bar shows */
-.fc .fc-daygrid-event {
-  background: transparent !important;
-  border: 0 !important;
-  padding: 0 !important;
-  cursor: pointer;
-}
-
-/* Small spacing so multiple bars stack nicely */
-.fc .fc-daygrid-event-harness {
-  margin-top: 2px;
 }

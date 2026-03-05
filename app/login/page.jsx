@@ -354,9 +354,9 @@ export default function LoginPage() {
             {/* Trust badges */}
             <div className="flex items-center justify-center gap-6">
               {[
-                { icon: "🔒", text: "SSL Secured" },
-                { icon: "🛡️", text: "GDPR Safe" },
-                { icon: "⚡", text: "99.9% Uptime" },
+                { text: "SSL Secured" },
+                { text: "GDPR Safe" },
+                { text: "99.9% Uptime" },
               ].map((b) => (
                 <div key={b.text} className="flex items-center gap-1.5 text-xs text-slate-400">
                   <span>{b.icon}</span>

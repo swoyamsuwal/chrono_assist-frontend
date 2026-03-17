@@ -21,6 +21,7 @@ const sidebarItems = [
   { name: "Prompt", href: "/prompt", icon: MessageSquare },
   { name: "Mail", href: "/mail", icon: Mail },
   { name: "Calendar", href: "/calendar", icon: Calendar },
+  { name: "E-mail Campain", href: "/mail-campain", icon: Mail },
 ];
 
 const STORAGE_KEY = "sidebar-expanded";

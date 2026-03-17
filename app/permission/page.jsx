@@ -15,6 +15,7 @@ export default function RolesPermissionsPage() {
 
   const [editingUserId, setEditingUserId] = useState(null);
   const [draftRoleId, setDraftRoleId] = useState("");
+  const [draftEmail, setDraftEmail] = useState("");
 
   function getAccessToken() {
     return typeof window !== "undefined"
@@ -41,11 +42,9 @@ export default function RolesPermissionsPage() {
   async function loadUsers() {
     const token = getAccessToken();
     if (!token) return;
-
     const res = await fetch(`${API_BASE}/authapp/list_users/`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
     if (!res.ok) throw new Error(`Failed to load users (${res.status})`);
     const data = await res.json();
     setUsers(data);
@@ -54,13 +53,10 @@ export default function RolesPermissionsPage() {
   async function loadRoles() {
     const token = getAccessToken();
     if (!token) return;
-
     const res = await fetch(`${API_BASE}/rbac/roles/`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-
     if (!res.ok) throw new Error(`Failed to load roles (${res.status})`);
-
     const data = await res.json();
     const list = Array.isArray(data) ? data : data?.results || [];
     setRoles(list);
@@ -98,17 +94,21 @@ export default function RolesPermissionsPage() {
     window.location.href = "/permission/roles/create";
   }
 
+  // ── Capture both role_id AND email when entering edit mode ──
   function handleEditUser(user) {
     setEditingUserId(user.id);
     setDraftRoleId(user.role_id ?? "");
+    setDraftEmail(user.email ?? "");
   }
 
   function cancelEdit() {
     setEditingUserId(null);
     setDraftRoleId("");
+    setDraftEmail("");
   }
 
-  async function saveRole(userId) {
+  // ── Single PATCH — sends role_id + email together ──────────
+  async function saveUser(userId) {
     const token = getAccessToken();
     if (!token) return;
 
@@ -126,19 +126,24 @@ export default function RolesPermissionsPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ role_id: Number(draftRoleId) }),
+        body: JSON.stringify({
+          role_id: Number(draftRoleId),
+          email: draftEmail.trim(),
+        }),
       });
 
       const payload = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         const msg =
+          payload?.email?.[0] ||
           payload?.role_id?.[0] ||
           payload?.error ||
-          `Role update failed (${res.status})`;
+          `Update failed (${res.status})`;
         throw new Error(msg);
       }
 
+      // Update local state from server response
       setUsers((prev) =>
         prev.map((u) =>
           u.id === userId
@@ -149,6 +154,7 @@ export default function RolesPermissionsPage() {
                   payload.role ??
                   rolesById.get(Number(draftRoleId))?.name ??
                   u.role,
+                  email: (payload.email ?? draftEmail.trim()) || u.email,
               }
             : u
         )
@@ -156,7 +162,7 @@ export default function RolesPermissionsPage() {
 
       cancelEdit();
     } catch (e) {
-      setError(e?.message || "Error updating role.");
+      setError(e?.message || "Error updating user.");
     }
   }
 
@@ -191,7 +197,8 @@ export default function RolesPermissionsPage() {
     if (!s) return "U";
     const parts = s.split(/[\s@._-]+/).filter(Boolean);
     return (
-      (parts[0]?.[0] || "U").toUpperCase() + (parts[1]?.[0] || "").toUpperCase()
+      (parts[0]?.[0] || "U").toUpperCase() +
+      (parts[1]?.[0] || "").toUpperCase()
     );
   }
 
@@ -206,14 +213,15 @@ export default function RolesPermissionsPage() {
 
   function statusTone(status) {
     const s = String(status || "").toLowerCase();
-    if (s.includes("active")) return "bg-emerald-50 text-emerald-700 ring-emerald-100";
+    if (s.includes("active"))
+      return "bg-emerald-50 text-emerald-700 ring-emerald-100";
     return "bg-slate-100 text-slate-600 ring-slate-200";
   }
 
   return (
     <SideBarLayout>
       <div className="w-full">
-        {/* PAGE HEADER (title left, Add User right) */}
+        {/* PAGE HEADER */}
         <div className="flex items-start justify-between gap-4 mb-6">
           <div className="min-w-0">
             <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">
@@ -231,23 +239,17 @@ export default function RolesPermissionsPage() {
             <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none">
               <path
                 d="M15 19c0-1.657-2.239-3-5-3s-5 1.343-5 3v1h10v-1Z"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+                stroke="currentColor" strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round"
               />
               <path
                 d="M10 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+                stroke="currentColor" strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round"
               />
               <path
                 d="M19 8v6M16 11h6"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round"
               />
             </svg>
             Add User
@@ -261,7 +263,7 @@ export default function RolesPermissionsPage() {
           </div>
         ) : null}
 
-        {/* ROLES HEADER (title/subtitle left, Add Role right) */}
+        {/* ROLES HEADER */}
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="min-w-0">
             <div className="text-lg font-semibold text-slate-900">Roles</div>
@@ -282,10 +284,7 @@ export default function RolesPermissionsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-6">
           {rolesLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
+              <div key={i} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="h-4 w-32 bg-slate-100 rounded mb-4" />
                 <div className="h-6 w-40 bg-slate-100 rounded mb-3" />
                 <div className="h-3 w-28 bg-slate-100 rounded" />
@@ -298,7 +297,6 @@ export default function RolesPermissionsPage() {
           ) : (
             roles.slice(0, 4).map((r) => {
               const count = usersCountByRoleId.get(r.id) || 0;
-
               return (
                 <div
                   key={r.id}
@@ -309,22 +307,15 @@ export default function RolesPermissionsPage() {
                       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
                         <path
                           d="M12 3 20 7v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V7l8-4Z"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinejoin="round"
+                          stroke="currentColor" strokeWidth="2" strokeLinejoin="round"
                         />
                       </svg>
                     </div>
-
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200">
                       {count} users
                     </span>
                   </div>
-
-                  <div className="mt-4 text-lg font-semibold text-slate-900">
-                    {r.name}
-                  </div>
-
+                  <div className="mt-4 text-lg font-semibold text-slate-900">{r.name}</div>
                   <div className="mt-2 text-sm text-slate-500 line-clamp-2">
                     {r.description || "—"}
                   </div>
@@ -334,39 +325,16 @@ export default function RolesPermissionsPage() {
           )}
         </div>
 
-        {/* Team Members table card */}
+        {/* Team Members table */}
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-            <div className="text-base font-semibold text-slate-900">
-              Team Members
-            </div>
-
+            <div className="text-base font-semibold text-slate-900">Team Members</div>
             <div className="flex items-center gap-2 text-sm text-slate-500">
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none">
-                <path
-                  d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M22 21v-2a4 4 0 0 0-3-3.87"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M16 3.13a4 4 0 0 1 0 7.75"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
               {users.length} total users
             </div>
@@ -403,6 +371,8 @@ export default function RolesPermissionsPage() {
 
                     return (
                       <tr key={u.id} className="hover:bg-slate-50/70 transition">
+
+                        {/* Name */}
                         <td className="py-4 px-5">
                           <div className="flex items-center gap-3">
                             <div className="h-10 w-10 rounded-full bg-indigo-600 text-white grid place-items-center text-xs font-semibold">
@@ -419,10 +389,24 @@ export default function RolesPermissionsPage() {
                           </div>
                         </td>
 
-                        <td className="py-4 px-5 text-sm text-slate-700">
-                          {u.email || "—"}
+                        {/* Email — input when editing, plain text otherwise */}
+                        <td className="py-4 px-5">
+                          {isEditing ? (
+                            <input
+                              type="email"
+                              value={draftEmail}
+                              onChange={(e) => setDraftEmail(e.target.value)}
+                              placeholder="user@example.com"
+                              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-300 transition"
+                            />
+                          ) : (
+                            <span className="text-sm text-slate-700">
+                              {u.email || "—"}
+                            </span>
+                          )}
                         </td>
 
+                        {/* Role — select when editing, badge otherwise */}
                         <td className="py-4 px-5">
                           {isEditing ? (
                             <select
@@ -452,6 +436,7 @@ export default function RolesPermissionsPage() {
                           )}
                         </td>
 
+                        {/* Status */}
                         <td className="py-4 px-5">
                           <span
                             className={[
@@ -463,12 +448,13 @@ export default function RolesPermissionsPage() {
                           </span>
                         </td>
 
+                        {/* Actions */}
                         <td className="py-4 px-5">
                           <div className="flex items-center justify-end gap-2">
                             {isEditing ? (
                               <>
                                 <button
-                                  onClick={() => saveRole(u.id)}
+                                  onClick={() => saveUser(u.id)}
                                   disabled={!draftRoleId}
                                   className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition"
                                 >
@@ -485,22 +471,15 @@ export default function RolesPermissionsPage() {
                               <>
                                 <button
                                   onClick={() => handleEditUser(u)}
-                                  title="Edit role"
+                                  title="Edit user"
                                   className="h-9 w-9 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition grid place-items-center"
                                 >
                                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none">
-                                    <path
-                                      d="M12 20h9"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                    />
+                                    <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                                     <path
                                       d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5Z"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
+                                      stroke="currentColor" strokeWidth="2"
+                                      strokeLinecap="round" strokeLinejoin="round"
                                     />
                                   </svg>
                                 </button>
@@ -513,10 +492,8 @@ export default function RolesPermissionsPage() {
                                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none">
                                     <path
                                       d="M4 7h16M10 11v6m4-6v6M9 7V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1"
-                                      stroke="currentColor"
-                                      strokeWidth="2"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
+                                      stroke="currentColor" strokeWidth="2"
+                                      strokeLinecap="round" strokeLinejoin="round"
                                     />
                                   </svg>
                                 </button>

@@ -54,6 +54,7 @@ export default function CalendarPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState(null);
+  const [filterDate, setFilterDate] = useState(""); // "YYYY-MM-DD" or ""
   const calendarRef = useRef(null);
 
   const api = axios.create({ baseURL: API_BASE });
@@ -89,7 +90,6 @@ export default function CalendarPage() {
   function evToFullCalendar(ev) {
     const start = ev.start?.dateTime || ev.start?.date;
     const end = ev.end?.dateTime || ev.end?.date;
-
     return {
       id: ev.id,
       title: ev.summary || "(no title)",
@@ -119,8 +119,7 @@ export default function CalendarPage() {
   async function handleConnect() {
     try {
       const res = await api.get(`/api/calendar/google/login/`);
-      const auth_url = res.data.auth_url;
-      window.location.href = auth_url;
+      window.location.href = res.data.auth_url;
     } catch (err) {
       console.error(err);
       setMessage("Failed to get auth URL");
@@ -133,9 +132,7 @@ export default function CalendarPage() {
     setMessage("Processing AI prompt...");
     try {
       const res = await api.post(`/api/calendar/ai-prompt/`, { prompt });
-      const action = res.data.action;
-      const status = res.data.status;
-      setMessage(`Success: ${action} (${status})`);
+      setMessage(`Success: ${res.data.action} (${res.data.status})`);
       setPrompt("");
       await fetchEvents();
     } catch (err) {
@@ -171,25 +168,44 @@ export default function CalendarPage() {
     return set;
   }, [events]);
 
+  // ── Upcoming: default = 2 past + today + 3 future; filtered = all on that date ──
   const upcoming = useMemo(() => {
-    const now = Date.now();
-    const list = events
-      .map((e) => ({
-        ...e,
-        _startMs: e.start ? new Date(e.start).getTime() : 0,
-      }))
-      .filter((e) => e._startMs && e._startMs >= now - 5 * 60 * 1000)
-      .sort((a, b) => a._startMs - b._startMs);
+    const now = new Date();
+    const todayStr = ymd(now);
 
-    return list.slice(0, 6);
-  }, [events]);
+    // Filter mode: show all events on the chosen date
+    if (filterDate) {
+      return events
+        .filter((e) => ymd(e.start) === filterDate)
+        .sort((a, b) => new Date(a.start) - new Date(b.start));
+    }
+
+    // Default mode: 2 most-recent past events
+    const past = events
+      .filter((e) => {
+        const d = ymd(e.start);
+        return d && d < todayStr;
+      })
+      .sort((a, b) => new Date(b.start) - new Date(a.start)) // newest-first
+      .slice(0, 2)
+      .reverse(); // back to chronological order
+
+    // Today's events + next 3 future days with events
+    const todayAndFuture = events
+      .filter((e) => {
+        const d = ymd(e.start);
+        return d && d >= todayStr;
+      })
+      .sort((a, b) => new Date(a.start) - new Date(b.start))
+      .slice(0, 4); // today + up to 3 future events
+
+    return [...past, ...todayAndFuture];
+  }, [events, filterDate]);
 
   function setPreset(text) {
     setPrompt(text);
-    // no scrolling needed anymore
   }
 
-  // React connector supports returning JSX for eventContent [web:3]
   function renderEventContent(arg) {
     if (arg.view.type === "dayGridMonth") {
       return <div className="fc-black-bar" aria-label={arg.event.title} />;
@@ -202,11 +218,24 @@ export default function CalendarPage() {
     );
   }
 
+  // ── Helper: label a date relative to today ──────────────────────────────────
+  function dateLabel(dateStr) {
+    const todayStr = ymd(new Date());
+    if (!dateStr) return "";
+    if (dateStr === todayStr) return "Today";
+    const diff =
+      (new Date(dateStr) - new Date(todayStr)) / (1000 * 60 * 60 * 24);
+    if (diff === 1) return "Tomorrow";
+    if (diff === -1) return "Yesterday";
+    if (diff < 0) return `${Math.abs(Math.round(diff))} days ago`;
+    return `In ${Math.round(diff)} days`;
+  }
+
   return (
     <SideBarLayout>
-      {/* Whole screen layout */}
       <div className="w-full h-[calc(100vh-24px)] flex flex-col overflow-hidden">
-        {/* Header */}
+
+        {/* ── Header ── */}
         <div className="flex items-start justify-between gap-4 mb-3 shrink-0">
           <div className="min-w-0">
             <h1 className="text-xl md:text-2xl font-semibold text-slate-900">
@@ -227,7 +256,7 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Message */}
+        {/* ── Message banner ── */}
         {message ? (
           <div
             className={[
@@ -242,15 +271,19 @@ export default function CalendarPage() {
           </div>
         ) : null}
 
-        {/* 2 rows inside the viewport: top (calendar+upcoming) + bottom (prompt) */}
+        {/* ── Main grid ── */}
         <div className="flex-1 min-h-0 grid grid-rows-[1fr_auto] gap-4">
-          {/* Top row */}
+
+          {/* Top row: calendar widget + upcoming panel */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0">
-            {/* Calendar widget */}
+
+            {/* ── Mini calendar ── */}
             <div className="lg:col-span-4 rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-0">
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div className="text-sm font-semibold text-slate-900">Calendar</div>
-                <div className="text-xs text-slate-500">{loading ? "Loading…" : " "}</div>
+                <div className="text-xs text-slate-500">
+                  {loading ? "Loading…" : " "}
+                </div>
               </div>
 
               <div className="p-3">
@@ -268,9 +301,14 @@ export default function CalendarPage() {
                     height="auto"
                     eventDisplay="block"
                     eventClick={handleEventClick}
-                    dayCellClassNames={(arg) => {
-                      const key = arg.dateStr;
-                      return eventDaysSet.has(key) ? ["has-event-day"] : [];
+                    dayCellClassNames={(arg) =>
+                      eventDaysSet.has(arg.dateStr) ? ["has-event-day"] : []
+                    }
+                    // Clicking a day sets the filter to that date
+                    dateClick={(arg) => {
+                      setFilterDate((prev) =>
+                        prev === arg.dateStr ? "" : arg.dateStr
+                      );
                     }}
                     eventDidMount={(info) => {
                       info.el.setAttribute("data-fc-tooltip", info.event.title);
@@ -281,43 +319,115 @@ export default function CalendarPage() {
               </div>
             </div>
 
-            {/* Upcoming (scroll only inside this box if needed) */}
+            {/* ── Upcoming panel ── */}
             <div className="lg:col-span-8 rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-0 flex flex-col">
-              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
-                <div className="text-sm font-semibold text-slate-900">Upcoming</div>
-                <div className="text-xs text-slate-500">{upcoming.length} upcoming</div>
+
+              {/* Panel header with date filter */}
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0 gap-3 flex-wrap">
+                <div className="text-sm font-semibold text-slate-900">
+                  {filterDate ? (
+                    <span>
+                      Events on{" "}
+                      <span className="text-indigo-600">
+                        {new Date(filterDate + "T00:00:00").toLocaleDateString([], {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
+                    </span>
+                  ) : (
+                    "Upcoming"
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Date picker */}
+                  <input
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => setFilterDate(e.target.value)}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-300 transition"
+                  />
+
+                  {/* Clear filter */}
+                  {filterDate && (
+                    <button
+                      onClick={() => setFilterDate("")}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+                    >
+                      Clear
+                    </button>
+                  )}
+
+                  <div className="text-xs text-slate-500">
+                    {upcoming.length} shown
+                  </div>
+                </div>
               </div>
 
+              {/* Event list */}
               <div className="p-4 space-y-3 overflow-auto min-h-0">
                 {upcoming.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center">
                     <div className="text-sm font-semibold text-slate-900">
-                      No upcoming meetings
+                      {filterDate ? "No events on this date" : "No upcoming meetings"}
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                      Create events using the prompt below.
+                      {filterDate
+                        ? "Try a different date or clear the filter."
+                        : "Create events using the prompt below."}
                     </div>
                   </div>
                 ) : (
                   upcoming.map((e) => {
                     const when = fmtTimeRange(e.start, e.end);
+                    const dayStr = ymd(e.start);
+                    const label = dateLabel(dayStr);
+                    const isToday = dayStr === ymd(new Date());
+                    const isPast = dayStr < ymd(new Date());
+
                     return (
                       <div
                         key={e.id}
-                        className="rounded-2xl border border-slate-200 bg-white px-4 py-3 hover:shadow-md transition"
+                        className={[
+                          "rounded-2xl border px-4 py-3 hover:shadow-md transition",
+                          isToday
+                            ? "border-indigo-200 bg-indigo-50/40"
+                            : isPast
+                            ? "border-slate-100 bg-slate-50/60 opacity-70"
+                            : "border-slate-200 bg-white",
+                        ].join(" ")}
                       >
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-slate-900 truncate">
-                            {e.title}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-slate-900 truncate">
+                              {e.title}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500">
+                              {when ? `🕒 ${when}` : " "}
+                            </div>
+                            <div className="mt-1 text-xs text-slate-500 truncate">
+                              {e.extendedProps?.conferenceData?.conferenceSolution
+                                ?.name ||
+                                e.extendedProps?.location ||
+                                " "}
+                            </div>
                           </div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {when ? `🕒 ${when}` : " "}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500 truncate">
-                            {e.extendedProps?.conferenceData?.conferenceSolution?.name ||
-                              e.extendedProps?.location ||
-                              " "}
-                          </div>
+
+                          {/* Relative date badge */}
+                          <span
+                            className={[
+                              "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1",
+                              isToday
+                                ? "bg-indigo-50 text-indigo-700 ring-indigo-100"
+                                : isPast
+                                ? "bg-slate-100 text-slate-500 ring-slate-200"
+                                : "bg-emerald-50 text-emerald-700 ring-emerald-100",
+                            ].join(" ")}
+                          >
+                            {label}
+                          </span>
                         </div>
                       </div>
                     );
@@ -327,7 +437,7 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          {/* Bottom row: Prompt always visible */}
+          {/* ── Bottom row: AI Prompt ── */}
           <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -416,7 +526,9 @@ export default function CalendarPage() {
                     </svg>
                   }
                   onClick={() =>
-                    setPreset("Create a reminder on [date] at [time]: [reminder text].")
+                    setPreset(
+                      "Create a reminder on [date] at [time]: [reminder text]."
+                    )
                   }
                 />
               </div>
@@ -427,8 +539,3 @@ export default function CalendarPage() {
     </SideBarLayout>
   );
 }
-
-
-
-
-

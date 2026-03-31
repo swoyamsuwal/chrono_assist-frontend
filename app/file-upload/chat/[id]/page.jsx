@@ -30,7 +30,7 @@ function buildWelcome(filename) {
 I can help you:
 • Answer specific questions from the content
 • Find details you're looking for
-I will ONLY use content from this file — not any other uploaded documents.
+I will ONLY use content from this file — not any other uploaded documents.`;
 }
 
 export default function DocChatPage() {

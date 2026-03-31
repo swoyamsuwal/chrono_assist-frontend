@@ -28,14 +28,9 @@ function buildWelcome(filename) {
 📄 ${filename || "Your document"}
 
 I can help you:
-• Summarize sections
 • Answer specific questions from the content
-• Explain terms or concepts in simple words
 • Find details you're looking for
-
 I will ONLY use content from this file — not any other uploaded documents.
-
-Example: "What are the main points in this document?"`;
 }
 
 export default function DocChatPage() {

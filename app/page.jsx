@@ -377,72 +377,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── PLANS ── */}
-      <section id="pricing" className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center max-w-xl mx-auto mb-16">
-            <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 bg-indigo-50 text-indigo-700 ring-indigo-100 mb-4">
-              Pricing
-            </span>
-            <h2 className="text-4xl font-bold text-slate-900 tracking-tight">Simple, honest pricing</h2>
-            <p className="mt-4 text-slate-500 italic text-base">
-              "If you don't use Chrono, your inbox will keep winning."
-            </p>
-          </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 items-start">
-            {plans.map((p) => (
-              <div
-                key={p.name}
-                className={[
-                  "rounded-2xl border p-6 flex flex-col",
-                  p.highlight
-                    ? "bg-slate-900 border-slate-900 shadow-2xl shadow-slate-200 scale-[1.03]"
-                    : "bg-white border-slate-200",
-                ].join(" ")}
-              >
-                {p.highlight && (
-                  <span className="inline-flex self-start items-center rounded-full px-2.5 py-1 text-[10px] font-semibold bg-indigo-500 text-white mb-4">
-                    Most popular
-                  </span>
-                )}
-
-                <div className={`text-xs font-semibold uppercase tracking-widest mb-1 ${p.highlight ? "text-slate-400" : "text-slate-400"}`}>
-                  {p.name}
-                </div>
-                <div className={`text-3xl font-bold mt-1 ${p.highlight ? "text-white" : "text-slate-900"}`}>
-                  {p.price}
-                </div>
-                <div className={`text-xs mt-0.5 mb-4 ${p.highlight ? "text-slate-400" : "text-slate-400"}`}>
-                  {p.sub}
-                </div>
-                <p className={`text-sm leading-relaxed mb-6 ${p.highlight ? "text-slate-400" : "text-slate-500"}`}>
-                  {p.desc}
-                </p>
-
-                <ul className="space-y-3 mb-8 flex-1">
-                  {p.items.map((item) => (
-                    <li key={item} className="flex items-center gap-2.5 text-sm">
-                      <div className={`h-5 w-5 rounded-full grid place-items-center shrink-0 ${p.highlight ? "bg-indigo-500/20" : "bg-slate-100"}`}>
-                        <svg className={`h-3 w-3 ${p.highlight ? "text-indigo-400" : "text-slate-500"}`} viewBox="0 0 24 24" fill="none">
-                          <path d="M20 6 9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                      <span className={p.highlight ? "text-slate-300" : "text-slate-600"}>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <Link href="/create-account">
-                  <button className={`w-full py-3 rounded-xl text-sm font-semibold transition ${p.ctaStyle}`}>
-                    {p.cta}
-                  </button>
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* ── CTA BANNER ── */}
       <section className="py-24 bg-slate-900 relative overflow-hidden">

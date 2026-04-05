@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { usePermissions } from "../hooks/usePermissions"; // updated
 import {
   LayoutDashboard,
   Shield,
@@ -19,7 +20,7 @@ const sidebarItems = [
   { name: "Permission", href: "/permission", icon: Shield },
   { name: "File Upload", href: "/file-upload", icon: Upload },
   { name: "Prompt", href: "/prompt", icon: MessageSquare },
-  { name: "Mail", href: "/mail", icon: Mail },
+  { name: "Mail", href: "/mail", icon: Mail, permission: { feature: "mail", action: "view" } }, // updated
   { name: "Calendar", href: "/calendar", icon: Calendar },
   { name: "E-mail Campain", href: "/mail-campain", icon: Mail },
 ];
@@ -39,6 +40,7 @@ function getInitials(nameOrEmail) {
 export default function SideBarLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { hasPermission } = usePermissions(); // updated
 
   const [expanded, setExpanded] = useState(null);
   const [hovered, setHovered] = useState(false);
@@ -169,59 +171,65 @@ export default function SideBarLayout({ children }) {
           {/* NAV */}
           <nav className="mt-1 px-2 flex-1 overflow-y-auto">
             <ul className="space-y-1">
-              {sidebarItems.map((item) => {
-                const active = pathname === item.href;
-                const Icon = item.icon;
+              {sidebarItems
+                .filter( // updated
+                  (item) =>
+                    !item.permission ||
+                    hasPermission(item.permission.feature, item.permission.action)
+                ) // updated
+                .map((item) => {
+                  const active = pathname === item.href;
+                  const Icon = item.icon;
 
-                return (
-                  <li key={item.href}>
-                    <button
-                      type="button"
-                      onClick={() => router.push(item.href)}
-                      className={`
-                        w-full h-12 rounded-xl
-                        transition-colors duration-150
-                        ${
-                          active
-                            ? "bg-gray-900 text-white"
-                            : "text-gray-700 hover:bg-gray-100"
-                        }
-                        ${isOpen ? "px-2" : "px-0"}
-                      `}
-                    >
-                      <span
+                  return (
+                    <li key={item.href}>
+                      <button
+                        type="button"
+                        onClick={() => router.push(item.href)}
                         className={`
-                          h-full w-full grid items-center
+                          w-full h-12 rounded-xl
+                          transition-colors duration-150
                           ${
-                            isOpen
-                              ? "grid-cols-[40px_1fr]"
-                              : "grid-cols-1 justify-items-center"
+                            active
+                              ? "bg-gray-900 text-white"
+                              : "text-gray-700 hover:bg-gray-100"
                           }
+                          ${isOpen ? "px-2" : "px-0"}
                         `}
                       >
                         <span
                           className={`
-                            h-10 w-10 rounded-xl grid place-items-center
+                            h-full w-full grid items-center
                             ${
-                              active
-                                ? "bg-gray-800 text-white"
-                                : "text-gray-500"
+                              isOpen
+                                ? "grid-cols-[40px_1fr]"
+                                : "grid-cols-1 justify-items-center"
                             }
                           `}
                         >
-                          <Icon className="h-4 w-4" />
-                        </span>
-
-                        {isOpen && (
-                          <span className="text-[13px] font-medium text-left">
-                            {item.name}
+                          <span
+                            className={`
+                              h-10 w-10 rounded-xl grid place-items-center
+                              ${
+                                active
+                                  ? "bg-gray-800 text-white"
+                                  : "text-gray-500"
+                              }
+                            `}
+                          >
+                            <Icon className="h-4 w-4" />
                           </span>
-                        )}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
+
+                          {isOpen && (
+                            <span className="text-[13px] font-medium text-left">
+                              {item.name}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
             </ul>
           </nav>
 

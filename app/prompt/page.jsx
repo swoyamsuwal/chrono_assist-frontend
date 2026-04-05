@@ -13,13 +13,12 @@ const WELCOME_MESSAGE = `Hello! I'm Chrono Assist AI. I can help you with:
 
 • Asking questions about your uploaded documents
 • Searching inside PDFs/DOCX/PPTX
-• Using chat history to answer follow-up questions
 • Explaining content in simple terms
 
 What would you like to do today?
 
 Start by asking a question
-Example: “Summarize the main points from my uploaded PDF.”`;
+Example: “Explain about a certain topic”`;
 
 export default function RagChatPage() {
   const [user, setUser] = useState(null);

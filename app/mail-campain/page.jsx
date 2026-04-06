@@ -230,7 +230,6 @@ export default function CampaignsPage() {
 
             ) : campaigns.length === 0 ? (
               <div className="text-center py-20 text-slate-400">
-                <p className="text-4xl mb-3">📋</p>
                 <p className="text-lg font-medium">No campaigns yet.</p>
                 <p className="text-sm mt-1">
                   Click <strong className="text-slate-600">+ New Campaign</strong> to get started.

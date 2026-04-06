@@ -24,8 +24,15 @@ const PERMISSIONS_UI = [
   { label: "Delete",                     feature: "files",      action: "delete" },
   { label: "Embed to AI",               feature: "files",      action: "execute" },
   { label: "Use RAG Chat",              feature: "prompt",     action: "execute" },
-  { label: "View",                       feature: "mail",       action: "view" },
-  { label: "Send",                       feature: "mail",       action: "execute" },
+  // ── One-on-one Mail ──
+  { label: "View",                    feature: "mail",       action: "view" },
+  { label: "Send",                    feature: "mail",       action: "execute" },
+  // ── Bulk Mail Campaign ──
+  { label: "View Campaigns",          feature: "bulk_mail",  action: "view" },
+  { label: "Create Campaign",         feature: "bulk_mail",  action: "create" },
+  { label: "Edit Campaign",           feature: "bulk_mail",  action: "update" },
+  { label: "Delete Campaign",         feature: "bulk_mail",  action: "delete" },
+  { label: "Send Campaign",           feature: "bulk_mail",  action: "execute" },
   { label: "Use (connect + prompt)",    feature: "calendar",   action: "execute" },
 ];
 
@@ -35,6 +42,7 @@ const GROUPS = [
   { key: "files",      label: "Files",       color: "bg-amber-50  text-amber-700  ring-amber-100",   dot: "bg-amber-500" },
   { key: "prompt",     label: "RAG Chat",    color: "bg-emerald-50 text-emerald-700 ring-emerald-100", dot: "bg-emerald-500" },
   { key: "mail",       label: "Mail",        color: "bg-blue-50   text-blue-700   ring-blue-100",    dot: "bg-blue-500" },
+  { key: "bulk_mail",  label: "Bulk Mail",    color: "bg-cyan-50   text-cyan-700   ring-cyan-100",     dot: "bg-cyan-500" }, 
   { key: "calendar",   label: "Calendar",    color: "bg-rose-50   text-rose-700   ring-rose-100",    dot: "bg-rose-500" },
 ];
 

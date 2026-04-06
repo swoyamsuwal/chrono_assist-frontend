@@ -17,12 +17,12 @@ import {
 
 const sidebarItems = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Permission", href: "/permission", icon: Shield },
-  { name: "File Upload", href: "/file-upload", icon: Upload },
-  { name: "Prompt", href: "/prompt", icon: MessageSquare },
-  { name: "Mail", href: "/mail", icon: Mail, permission: { feature: "mail", action: "view" } }, // updated
-  { name: "Calendar", href: "/calendar", icon: Calendar },
-  { name: "E-mail Campain", href: "/mail-campain", icon: Mail },
+  { name: "Permission", href: "/permission", icon: Shield,permission: { feature: "permission", action: "view" } },
+  { name: "File Upload", href: "/file-upload", icon: Upload,permission: { feature: "file-upload", action: "view" } },
+  { name: "Prompt", href: "/prompt", icon: MessageSquare, permission: { feature: "prompt", action: "execute" } },
+  { name: "Mail", href: "/mail", icon: Mail, permission: { feature: "mail", action: "view" } },
+  { name: "Calendar", href: "/calendar", icon: Calendar, permission: { feature: "calendar", action: "execute" }},
+  { name: "E-mail Campain", href: "/mail-campain", icon: Mail,permission: { feature: "mail-campain", action: "view" } },
 ];
 
 const STORAGE_KEY = "sidebar-expanded";

@@ -33,6 +33,8 @@ const PERMISSIONS_UI = [
   { label: "Edit Campaign",           feature: "bulk_mail",  action: "update" },
   { label: "Delete Campaign",         feature: "bulk_mail",  action: "delete" },
   { label: "Send Campaign",           feature: "bulk_mail",  action: "execute" },
+  //Calender
+  { label: "View",    feature: "calendar",   action: "view" },
   { label: "Use (connect + prompt)",    feature: "calendar",   action: "execute" },
 ];
 

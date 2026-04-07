@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import SideBarLayout from "../components/Side_bar";
 import { apiFetch } from "../lib/api";
+import { usePermissions } from "../hooks/usePermissions"; // ← import
 
 const STATUS = {
   TASK: "TASK",
@@ -18,12 +19,7 @@ function statusTitle(status) {
 
 function toDatetimeLocalValue(date) {
   const pad = (n) => String(n).padStart(2, "0");
-  const yyyy = date.getFullYear();
-  const mm = pad(date.getMonth() + 1);
-  const dd = pad(date.getDate());
-  const hh = pad(date.getHours());
-  const mi = pad(date.getMinutes());
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function datetimeLocalToISO(value) {
@@ -34,14 +30,11 @@ function datetimeLocalToISO(value) {
 
 function initials(name = "") {
   const parts = String(name).trim().split(/\s+/).filter(Boolean);
-  const a = parts[0]?.[0] ?? "U";
-  const b = parts[1]?.[0] ?? "";
-  return (a + b).toUpperCase();
+  return ((parts[0]?.[0] ?? "U") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
 function AssignedUserPill({ user }) {
   const name = user?.username ?? "Unassigned";
-
   return (
     <div className="flex items-center gap-2">
       <div className="h-7 w-7 rounded-full bg-slate-100 border border-slate-200 text-slate-700 grid place-items-center text-[11px] font-semibold">
@@ -57,12 +50,7 @@ function AssignedUserPill({ user }) {
 function IconPlus({ className = "" }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none">
-      <path
-        d="M12 5v14M5 12h14"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -70,12 +58,7 @@ function IconPlus({ className = "" }) {
 function IconDots({ className = "" }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none">
-      <path
-        d="M5 12h.01M12 12h.01M19 12h.01"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
+      <path d="M5 12h.01M12 12h.01M19 12h.01" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
     </svg>
   );
 }
@@ -96,12 +79,7 @@ function IconTrash({ className = "" }) {
 
 function matchesQuery(task, q) {
   if (!q) return true;
-  const hay = [
-    task?.title,
-    task?.short_description,
-    task?.full_description,
-    task?.assigned_to?.username,
-  ]
+  const hay = [task?.title, task?.short_description, task?.full_description, task?.assigned_to?.username]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -109,17 +87,26 @@ function matchesQuery(task, q) {
 }
 
 export default function TasksBoardPage() {
-  const [board, setBoard] = useState({ TASK: [], IN_PROGRESS: [], FINISHED: [] });
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
+  // ── permissions ──────────────────────────────────────────────────────────
+  const { hasPermission, loading: permLoading } = usePermissions();
 
-  const [users, setUsers] = useState([]);
+  const canCreate = hasPermission("tasks", "create");
+  const canUpdate = hasPermission("tasks", "update");
+  const canDelete = hasPermission("tasks", "delete");
+  // tasks:view is handled by the sidebar — no extra gate needed here
+
+  // ── state ─────────────────────────────────────────────────────────────────
+  const [board, setBoard]       = useState({ TASK: [], IN_PROGRESS: [], FINISHED: [] });
+  const [loading, setLoading]   = useState(true);
+  const [err, setErr]           = useState("");
+
+  const [users, setUsers]             = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
-  const [usersErr, setUsersErr] = useState("");
+  const [usersErr, setUsersErr]       = useState("");
 
   const [openCreate, setOpenCreate] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [createErr, setCreateErr] = useState("");
+  const [creating, setCreating]     = useState(false);
+  const [createErr, setCreateErr]   = useState("");
 
   const [query, setQuery] = useState("");
 
@@ -133,15 +120,16 @@ export default function TasksBoardPage() {
 
   const columns = useMemo(() => [STATUS.TASK, STATUS.IN_PROGRESS, STATUS.FINISHED], []);
 
+  // ── data fetching ─────────────────────────────────────────────────────────
   async function loadBoard() {
     setErr("");
     setLoading(true);
     try {
       const data = await apiFetch("/api/tasks/tasks/board/");
       setBoard({
-        TASK: data.TASK || [],
+        TASK:        data.TASK        || [],
         IN_PROGRESS: data.IN_PROGRESS || [],
-        FINISHED: data.FINISHED || [],
+        FINISHED:    data.FINISHED    || [],
       });
     } catch (e) {
       setErr(e.message || "Failed to load tasks");
@@ -169,6 +157,7 @@ export default function TasksBoardPage() {
     loadUsers();
   }, []);
 
+  // ── actions ───────────────────────────────────────────────────────────────
   async function moveTask(task, newStatus) {
     try {
       await apiFetch(`/api/tasks/tasks/${task.id}/update/`, {
@@ -206,24 +195,21 @@ export default function TasksBoardPage() {
   async function submitCreate(e) {
     e.preventDefault();
     setCreateErr("");
-
     const deadlineISO = datetimeLocalToISO(form.deadline);
-    if (!deadlineISO) return setCreateErr("Invalid deadline date/time.");
+    if (!deadlineISO)    return setCreateErr("Invalid deadline date/time.");
     if (!form.assigned_to) return setCreateErr("Please select a user to assign.");
-
     setCreating(true);
     try {
       await apiFetch("/api/tasks/tasks/", {
         method: "POST",
         body: {
-          title: form.title,
+          title:             form.title,
           short_description: form.short_description,
-          full_description: form.full_description,
-          deadline: deadlineISO,
-          assigned_to: Number(form.assigned_to),
+          full_description:  form.full_description,
+          deadline:          deadlineISO,
+          assigned_to:       Number(form.assigned_to),
         },
       });
-
       setOpenCreate(false);
       setForm({ title: "", short_description: "", full_description: "", deadline: "", assigned_to: "" });
       await loadBoard();
@@ -242,17 +228,15 @@ export default function TasksBoardPage() {
     return next;
   }, [board, columns, query]);
 
+  // ── render ────────────────────────────────────────────────────────────────
   return (
     <SideBarLayout>
       <div className="min-h-[calc(100vh-40px)] w-full rounded-2xl border border-slate-200 bg-white">
+
         {/* Top bar */}
         <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-slate-200">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl md:text-2xl font-semibold text-slate-900">Dashboard</h1>
-         
-          </div>
+          <h1 className="text-xl md:text-2xl font-semibold text-slate-900">Dashboard</h1>
 
-          {/* Search (filters tasks) */}
           <div className="w-full max-w-md">
             <div className="relative">
               <input
@@ -261,29 +245,27 @@ export default function TasksBoardPage() {
                 placeholder="Search tasks..."
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300"
               />
-              {query ? (
+              {query && (
                 <button
                   type="button"
                   onClick={() => setQuery("")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 text-sm"
-                  title="Clear"
                 >
                   ✕
                 </button>
-              ) : null}
+              )}
             </div>
           </div>
         </div>
 
-        {/* Errors */}
-        {err ? (
+        {err && (
           <div className="mx-6 mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {err}
           </div>
-        ) : null}
+        )}
 
         {/* Board */}
-        {loading ? (
+        {loading || permLoading ? (
           <div className="px-6 py-14 text-center text-slate-500">Loading tasks...</div>
         ) : (
           <div className="px-6 py-6">
@@ -306,8 +288,8 @@ export default function TasksBoardPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* Only show add (+) on TASK column */}
-                        {col === STATUS.TASK ? (
+                        {/* ── CREATE gate: only show + if canCreate ── */}
+                        {col === STATUS.TASK && canCreate && (
                           <button
                             onClick={openCreateModal}
                             className="h-9 w-9 grid place-items-center rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition"
@@ -315,7 +297,7 @@ export default function TasksBoardPage() {
                           >
                             <IconPlus className="h-5 w-5" />
                           </button>
-                        ) : null}
+                        )}
 
                         <button
                           className="h-9 w-9 grid place-items-center rounded-xl bg-transparent text-slate-500 hover:bg-white hover:border hover:border-slate-200 transition"
@@ -349,13 +331,16 @@ export default function TasksBoardPage() {
                                 </div>
                               </div>
 
-                              <button
-                                onClick={() => deleteTask(t)}
-                                title="Delete"
-                                className="h-9 w-9 grid place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition"
-                              >
-                                <IconTrash className="h-4 w-4" />
-                              </button>
+                              {/* ── DELETE gate ── */}
+                              {canDelete && (
+                                <button
+                                  onClick={() => deleteTask(t)}
+                                  title="Delete"
+                                  className="h-9 w-9 grid place-items-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition"
+                                >
+                                  <IconTrash className="h-4 w-4" />
+                                </button>
+                              )}
                             </div>
 
                             <div className="mt-4 flex flex-col gap-2">
@@ -368,32 +353,35 @@ export default function TasksBoardPage() {
                               </div>
                             </div>
 
-                            <div className="mt-4 flex flex-wrap gap-2">
-                              {col !== STATUS.TASK && (
-                                <button
-                                  onClick={() => moveTask(t, STATUS.TASK)}
-                                  className="px-3 py-2 rounded-xl text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 transition"
-                                >
-                                  Move to To do
-                                </button>
-                              )}
-                              {col !== STATUS.IN_PROGRESS && (
-                                <button
-                                  onClick={() => moveTask(t, STATUS.IN_PROGRESS)}
-                                  className="px-3 py-2 rounded-xl text-xs bg-blue-600 hover:bg-blue-700 text-white transition"
-                                >
-                                  Move to In progress
-                                </button>
-                              )}
-                              {col !== STATUS.FINISHED && (
-                                <button
-                                  onClick={() => moveTask(t, STATUS.FINISHED)}
-                                  className="px-3 py-2 rounded-xl text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition"
-                                >
-                                  Move to Done
-                                </button>
-                              )}
-                            </div>
+                            {/* ── UPDATE gate: hide all move buttons if no update perm ── */}
+                            {canUpdate && (
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                {col !== STATUS.TASK && (
+                                  <button
+                                    onClick={() => moveTask(t, STATUS.TASK)}
+                                    className="px-3 py-2 rounded-xl text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 transition"
+                                  >
+                                    Send to To do
+                                  </button>
+                                )}
+                                {col !== STATUS.IN_PROGRESS && (
+                                  <button
+                                    onClick={() => moveTask(t, STATUS.IN_PROGRESS)}
+                                    className="px-3 py-2 rounded-xl text-xs bg-blue-600 hover:bg-blue-700 text-white transition"
+                                  >
+                                    In Progress
+                                  </button>
+                                )}
+                                {col !== STATUS.FINISHED && (
+                                  <button
+                                    onClick={() => moveTask(t, STATUS.FINISHED)}
+                                    className="px-3 py-2 rounded-xl text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition"
+                                  >
+                                    Done
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         ))
                       )}
@@ -406,13 +394,11 @@ export default function TasksBoardPage() {
         )}
       </div>
 
-      {/* Create Task Modal (white UI) */}
-      {openCreate ? (
+      {/* Create Task Modal */}
+      {openCreate && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) closeCreateModal();
-          }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget) closeCreateModal(); }}
         >
           <div className="w-full max-w-2xl bg-white rounded-2xl border border-slate-200 shadow-xl p-6">
             <div className="flex items-center justify-between mb-4">
@@ -426,25 +412,20 @@ export default function TasksBoardPage() {
               </button>
             </div>
 
-            {createErr ? (
+            {createErr && (
               <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mb-4">
                 {createErr}
               </div>
-            ) : null}
+            )}
 
-            {usersErr ? (
+            {usersErr && (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 mb-4">
                 {usersErr}{" "}
-                <button
-                  type="button"
-                  onClick={loadUsers}
-                  className="ml-2 underline hover:text-slate-900"
-                  disabled={usersLoading}
-                >
+                <button type="button" onClick={loadUsers} className="ml-2 underline" disabled={usersLoading}>
                   Retry
                 </button>
               </div>
-            ) : null}
+            )}
 
             <form onSubmit={submitCreate} className="space-y-4">
               <div>
@@ -523,7 +504,7 @@ export default function TasksBoardPage() {
             </form>
           </div>
         </div>
-      ) : null}
+      )}
     </SideBarLayout>
   );
 }

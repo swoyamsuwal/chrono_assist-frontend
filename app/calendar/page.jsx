@@ -6,6 +6,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import SideBarLayout from "../components/Side_bar";
+import { usePermissions } from "../hooks/usePermissions";
 import axios from "axios";
 import "./calendar.css";
 
@@ -13,7 +14,7 @@ const API_BASE = "http://127.0.0.1:8000";
 
 function fmtTimeRange(start, end) {
   const s = start ? new Date(start) : null;
-  const e = end ? new Date(end) : null;
+  const e = end   ? new Date(end)   : null;
   if (!s) return "";
   const opt = { hour: "numeric", minute: "2-digit" };
   const a = s.toLocaleTimeString([], opt);
@@ -49,12 +50,21 @@ function PresetCard({ title, description, icon, onClick }) {
 }
 
 export default function CalendarPage() {
-  const [events, setEvents] = useState([]);
-  const [prompt, setPrompt] = useState("");
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState(null);
-  const [filterDate, setFilterDate] = useState(""); // "YYYY-MM-DD" or ""
+  // ── permissions ────────────────────────────────────────────────────────────
+  const { hasPermission, loading: permLoading } = usePermissions();
+
+  // Only the AI Prompt section is gated behind calendar:execute.
+  // "Connect Google Calendar" is always visible to anyone with calendar:view
+  // (view is already handled by the sidebar — if they can reach this page they can connect).
+  const canExecute = hasPermission("calendar", "execute");
+
+  // ── state ──────────────────────────────────────────────────────────────────
+  const [events, setEvents]         = useState([]);
+  const [prompt, setPrompt]         = useState("");
+  const [message, setMessage]       = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [user, setUser]             = useState(null);
+  const [filterDate, setFilterDate] = useState("");
   const calendarRef = useRef(null);
 
   const api = axios.create({ baseURL: API_BASE });
@@ -74,11 +84,7 @@ export default function CalendarPage() {
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem("user");
     if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        setUser(null);
-      }
+      try { setUser(JSON.parse(stored)); } catch { setUser(null); }
     }
   }, []);
 
@@ -89,7 +95,7 @@ export default function CalendarPage() {
 
   function evToFullCalendar(ev) {
     const start = ev.start?.dateTime || ev.start?.date;
-    const end = ev.end?.dateTime || ev.end?.date;
+    const end   = ev.end?.dateTime   || ev.end?.date;
     return {
       id: ev.id,
       title: ev.summary || "(no title)",
@@ -168,43 +174,31 @@ export default function CalendarPage() {
     return set;
   }, [events]);
 
-  // ── Upcoming: default = 2 past + today + 3 future; filtered = all on that date ──
   const upcoming = useMemo(() => {
-    const now = new Date();
+    const now      = new Date();
     const todayStr = ymd(now);
 
-    // Filter mode: show all events on the chosen date
     if (filterDate) {
       return events
         .filter((e) => ymd(e.start) === filterDate)
         .sort((a, b) => new Date(a.start) - new Date(b.start));
     }
 
-    // Default mode: 2 most-recent past events
     const past = events
-      .filter((e) => {
-        const d = ymd(e.start);
-        return d && d < todayStr;
-      })
-      .sort((a, b) => new Date(b.start) - new Date(a.start)) // newest-first
+      .filter((e) => { const d = ymd(e.start); return d && d < todayStr; })
+      .sort((a, b) => new Date(b.start) - new Date(a.start))
       .slice(0, 2)
-      .reverse(); // back to chronological order
+      .reverse();
 
-    // Today's events + next 3 future days with events
     const todayAndFuture = events
-      .filter((e) => {
-        const d = ymd(e.start);
-        return d && d >= todayStr;
-      })
+      .filter((e) => { const d = ymd(e.start); return d && d >= todayStr; })
       .sort((a, b) => new Date(a.start) - new Date(b.start))
-      .slice(0, 4); // today + up to 3 future events
+      .slice(0, 4);
 
     return [...past, ...todayAndFuture];
   }, [events, filterDate]);
 
-  function setPreset(text) {
-    setPrompt(text);
-  }
+  function setPreset(text) { setPrompt(text); }
 
   function renderEventContent(arg) {
     if (arg.view.type === "dayGridMonth") {
@@ -218,16 +212,14 @@ export default function CalendarPage() {
     );
   }
 
-  // ── Helper: label a date relative to today ──────────────────────────────────
   function dateLabel(dateStr) {
     const todayStr = ymd(new Date());
     if (!dateStr) return "";
     if (dateStr === todayStr) return "Today";
-    const diff =
-      (new Date(dateStr) - new Date(todayStr)) / (1000 * 60 * 60 * 24);
-    if (diff === 1) return "Tomorrow";
+    const diff = (new Date(dateStr) - new Date(todayStr)) / (1000 * 60 * 60 * 24);
+    if (diff === 1)  return "Tomorrow";
     if (diff === -1) return "Yesterday";
-    if (diff < 0) return `${Math.abs(Math.round(diff))} days ago`;
+    if (diff < 0)    return `${Math.abs(Math.round(diff))} days ago`;
     return `In ${Math.round(diff)} days`;
   }
 
@@ -246,6 +238,7 @@ export default function CalendarPage() {
             </p>
           </div>
 
+          {/* ── Always visible — no permission gate ── */}
           <div className="shrink-0 flex items-center gap-2">
             <button
               onClick={handleConnect}
@@ -272,7 +265,7 @@ export default function CalendarPage() {
         ) : null}
 
         {/* ── Main grid ── */}
-        <div className="flex-1 min-h-0 grid grid-rows-[1fr_auto] gap-4">
+        <div className={`flex-1 min-h-0 grid ${canExecute ? "grid-rows-[1fr_auto]" : "grid-rows-[1fr]"} gap-4`}>
 
           {/* Top row: calendar widget + upcoming panel */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0">
@@ -304,7 +297,6 @@ export default function CalendarPage() {
                     dayCellClassNames={(arg) =>
                       eventDaysSet.has(arg.dateStr) ? ["has-event-day"] : []
                     }
-                    // Clicking a day sets the filter to that date
                     dateClick={(arg) => {
                       setFilterDate((prev) =>
                         prev === arg.dateStr ? "" : arg.dateStr
@@ -322,7 +314,6 @@ export default function CalendarPage() {
             {/* ── Upcoming panel ── */}
             <div className="lg:col-span-8 rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-0 flex flex-col">
 
-              {/* Panel header with date filter */}
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0 gap-3 flex-wrap">
                 <div className="text-sm font-semibold text-slate-900">
                   {filterDate ? (
@@ -342,15 +333,12 @@ export default function CalendarPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {/* Date picker */}
                   <input
                     type="date"
                     value={filterDate}
                     onChange={(e) => setFilterDate(e.target.value)}
                     className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-300 transition"
                   />
-
-                  {/* Clear filter */}
                   {filterDate && (
                     <button
                       onClick={() => setFilterDate("")}
@@ -359,14 +347,10 @@ export default function CalendarPage() {
                       Clear
                     </button>
                   )}
-
-                  <div className="text-xs text-slate-500">
-                    {upcoming.length} shown
-                  </div>
+                  <div className="text-xs text-slate-500">{upcoming.length} shown</div>
                 </div>
               </div>
 
-              {/* Event list */}
               <div className="p-4 space-y-3 overflow-auto min-h-0">
                 {upcoming.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center">
@@ -376,16 +360,18 @@ export default function CalendarPage() {
                     <div className="mt-1 text-xs text-slate-500">
                       {filterDate
                         ? "Try a different date or clear the filter."
-                        : "Create events using the prompt below."}
+                        : canExecute
+                          ? "Create events using the prompt below."
+                          : "No events scheduled yet."}
                     </div>
                   </div>
                 ) : (
                   upcoming.map((e) => {
-                    const when = fmtTimeRange(e.start, e.end);
-                    const dayStr = ymd(e.start);
-                    const label = dateLabel(dayStr);
+                    const when    = fmtTimeRange(e.start, e.end);
+                    const dayStr  = ymd(e.start);
+                    const label   = dateLabel(dayStr);
                     const isToday = dayStr === ymd(new Date());
-                    const isPast = dayStr < ymd(new Date());
+                    const isPast  = dayStr < ymd(new Date());
 
                     return (
                       <div
@@ -408,14 +394,11 @@ export default function CalendarPage() {
                               {when ? `🕒 ${when}` : " "}
                             </div>
                             <div className="mt-1 text-xs text-slate-500 truncate">
-                              {e.extendedProps?.conferenceData?.conferenceSolution
-                                ?.name ||
+                              {e.extendedProps?.conferenceData?.conferenceSolution?.name ||
                                 e.extendedProps?.location ||
                                 " "}
                             </div>
                           </div>
-
-                          {/* Relative date badge */}
                           <span
                             className={[
                               "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1",
@@ -437,103 +420,95 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          {/* ── Bottom row: AI Prompt ── */}
-          <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <div className="text-sm font-semibold text-slate-900">Prompt</div>
-                <div className="text-xs text-slate-500">
-                  Tell AI what you want. You can edit the preset text.
+          {/* ── EXECUTE gate: only the AI Prompt section ── */}
+          {canExecute && (
+            <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Prompt</div>
+                  <div className="text-xs text-slate-500">
+                    Tell AI what you want. You can edit the preset text.
+                  </div>
+                </div>
+
+                <button
+                  onClick={sendPrompt}
+                  disabled={loading || !prompt.trim()}
+                  className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition"
+                >
+                  {loading ? "Processing..." : "Send"}
+                </button>
+              </div>
+
+              <div className="p-4 grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+                <div className="xl:col-span-7">
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    rows={3}
+                    placeholder={`Try: "Create a reminder on [date] at [time]: [reminder text]."`}
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300"
+                  />
+                </div>
+
+                <div className="xl:col-span-5 grid grid-cols-1 md:grid-cols-3 xl:grid-cols-1 gap-3">
+                  <PresetCard
+                    title="Event"
+                    description='Template: "Create event on ..."'
+                    icon={
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+                        <path
+                          d="M8 2v3M16 2v3M4 7h16M6 11h4M6 15h4M14 11h4M14 15h4M6 19h12"
+                          stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                        />
+                      </svg>
+                    }
+                    onClick={() =>
+                      setPreset("Create event on [date] at [time] titled [title]. Notes: [details].")
+                    }
+                  />
+
+                  <PresetCard
+                    title="Meeting"
+                    description='Template: "There is a meeting..."'
+                    icon={
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+                        <path
+                          d="M16 11c1.66 0 3-1.57 3-3.5S17.66 4 16 4s-3 1.57-3 3.5S14.34 11 16 11Z"
+                          stroke="currentColor" strokeWidth="2"
+                        />
+                        <path
+                          d="M6 11c1.66 0 3-1.57 3-3.5S7.66 4 6 4 3 5.57 3 7.5 4.34 11 6 11Z"
+                          stroke="currentColor" strokeWidth="2"
+                        />
+                      </svg>
+                    }
+                    onClick={() =>
+                      setPreset(
+                        "There is a meeting about [topic] on [date] at [time] with [attendees]. Location/Link: [zoom/google meet]."
+                      )
+                    }
+                  />
+
+                  <PresetCard
+                    title="Reminder"
+                    description="Quick reminder"
+                    icon={
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+                        <path
+                          d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2h16l-2-2Z"
+                          stroke="currentColor" strokeWidth="2" strokeLinejoin="round"
+                        />
+                      </svg>
+                    }
+                    onClick={() =>
+                      setPreset("Create a reminder on [date] at [time]: [reminder text].")
+                    }
+                  />
                 </div>
               </div>
-
-              <button
-                onClick={sendPrompt}
-                disabled={loading || !prompt.trim()}
-                className="rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition"
-              >
-                {loading ? "Processing..." : "Send"}
-              </button>
             </div>
-
-            <div className="p-4 grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-              <div className="xl:col-span-7">
-                <textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  rows={3}
-                  placeholder={`Try: "Create a reminder on [date] at [time]: [reminder text]."`}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300"
-                />
-              </div>
-
-              <div className="xl:col-span-5 grid grid-cols-1 md:grid-cols-3 xl:grid-cols-1 gap-3">
-                <PresetCard
-                  title="Event"
-                  description='Template: "Create event on ..."'
-                  icon={
-                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
-                      <path
-                        d="M8 2v3M16 2v3M4 7h16M6 11h4M6 15h4M14 11h4M14 15h4M6 19h12"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  }
-                  onClick={() =>
-                    setPreset(
-                      "Create event on [date] at [time] titled [title]. Notes: [details]."
-                    )
-                  }
-                />
-
-                <PresetCard
-                  title="Meeting"
-                  description='Template: "There is a meeting..."'
-                  icon={
-                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
-                      <path
-                        d="M16 11c1.66 0 3-1.57 3-3.5S17.66 4 16 4s-3 1.57-3 3.5S14.34 11 16 11Z"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      />
-                      <path
-                        d="M6 11c1.66 0 3-1.57 3-3.5S7.66 4 6 4 3 5.57 3 7.5 4.34 11 6 11Z"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      />
-                    </svg>
-                  }
-                  onClick={() =>
-                    setPreset(
-                      "There is a meeting about [topic] on [date] at [time] with [attendees]. Location/Link: [zoom/google meet]."
-                    )
-                  }
-                />
-
-                <PresetCard
-                  title="Reminder"
-                  description="Quick reminder"
-                  icon={
-                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
-                      <path
-                        d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2h16l-2-2Z"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  }
-                  onClick={() =>
-                    setPreset(
-                      "Create a reminder on [date] at [time]: [reminder text]."
-                    )
-                  }
-                />
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </SideBarLayout>

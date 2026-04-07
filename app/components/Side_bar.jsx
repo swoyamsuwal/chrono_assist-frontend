@@ -21,7 +21,7 @@ const sidebarItems = [
   { name: "File Upload", href: "/file-upload", icon: Upload,permission: { feature: "files", action: "view" } },
   { name: "Prompt", href: "/prompt", icon: MessageSquare, permission: { feature: "prompt", action: "execute" } },
   { name: "Mail", href: "/mail", icon: Mail, permission: { feature: "mail", action: "view" } },
-  { name: "Calendar", href: "/calendar", icon: Calendar, permission: { feature: "calendar", action: "execute" }},
+  { name: "Calendar", href: "/calendar", icon: Calendar, permission: { feature: "calendar", action: "view" }},
   { name: "E-mail Campain", href: "/mail-campain", icon: Mail,permission: { feature: "bulk_mail", action: "view" } },
 ];
 

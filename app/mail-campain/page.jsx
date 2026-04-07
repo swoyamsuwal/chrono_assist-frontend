@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import SideBarLayout from "../components/Side_bar";
+import { usePermissions } from "../hooks/usePermissions"; // ← import
 
 const API_BASE = "http://127.0.0.1:8000/api/mail";
 
@@ -71,7 +72,7 @@ function StatusBadge({ hasDraft, recipientCount }) {
   if (!hasDraft)
     return (
       <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold bg-amber-50 text-amber-700 ring-1 ring-amber-200">
-       No draft
+        No draft
       </span>
     );
   if (recipientCount === 0)
@@ -99,6 +100,15 @@ function Modal({ children }) {
 export default function CampaignsPage() {
   const router = useRouter();
 
+  // ── permissions ────────────────────────────────────────────────────────────
+  const { hasPermission, loading: permLoading } = usePermissions();
+
+  const canCreate = hasPermission("bulk_mail", "create");  // + New Campaign button + modal
+  const canUpdate = hasPermission("bulk_mail", "update");  // Rename, Edit Draft, People
+  const canDelete = hasPermission("bulk_mail", "delete");  // Delete button
+  const canSend   = hasPermission("bulk_mail", "execute"); // Send button
+
+  // ── state ──────────────────────────────────────────────────────────────────
   const [campaigns, setCampaigns]         = useState([]);
   const [loading, setLoading]             = useState(true);
   const [globalError, setGlobalError]     = useState("");
@@ -188,13 +198,16 @@ export default function CampaignsPage() {
       setSendState((s) => ({
         ...s,
         [c.id]: {
-          msg: ` Queued for ${res.total_recipients} recipient${res.total_recipients !== 1 ? "s" : ""}`,
+          msg: `Queued for ${res.total_recipients} recipient${res.total_recipients !== 1 ? "s" : ""}`,
         },
       }));
     } catch (e) {
       setSendState((s) => ({ ...s, [c.id]: { error: e.message } }));
     }
   };
+
+  // Whether a row has ANY visible action button — if not, skip the actions cell
+  const anyRowAction = canUpdate || canDelete || canSend;
 
   return (
     <SideBarLayout>
@@ -208,12 +221,16 @@ export default function CampaignsPage() {
               Create group → add people → write draft → send.
             </p>
           </div>
-          <button
-            onClick={() => { setCreateName(""); setShowCreate(true); }}
-            className="shrink-0 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition"
-          >
-            + New Campaign
-          </button>
+
+          {/* ── CREATE gate: + New Campaign button ── */}
+          {canCreate && (
+            <button
+              onClick={() => { setCreateName(""); setShowCreate(true); }}
+              className="shrink-0 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition"
+            >
+              + New Campaign
+            </button>
+          )}
         </div>
 
         {globalError && (
@@ -225,15 +242,17 @@ export default function CampaignsPage() {
         <div className="flex-1 overflow-y-auto px-6 py-6 bg-slate-50">
           <div className="max-w-4xl mx-auto space-y-4">
 
-            {loading ? (
+            {loading || permLoading ? (
               <p className="text-sm text-slate-500">Loading campaigns…</p>
 
             ) : campaigns.length === 0 ? (
               <div className="text-center py-20 text-slate-400">
                 <p className="text-lg font-medium">No campaigns yet.</p>
-                <p className="text-sm mt-1">
-                  Click <strong className="text-slate-600">+ New Campaign</strong> to get started.
-                </p>
+                {canCreate && (
+                  <p className="text-sm mt-1">
+                    Click <strong className="text-slate-600">+ New Campaign</strong> to get started.
+                  </p>
+                )}
               </div>
 
             ) : (
@@ -254,39 +273,57 @@ export default function CampaignsPage() {
                         </p>
                       </div>
 
-                      <div className="shrink-0 flex flex-wrap gap-2">
-                        <button
-                          onClick={() => { setRenaming(c); setRenameName(c.name); }}
-                          className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition"
-                        >
-                          Rename
-                        </button>
-                        <button
-                          onClick={() => router.push(`/mail-campain/${c.id}/edit`)}
-                          className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-indigo-100 bg-white hover:bg-indigo-50 text-indigo-700 transition"
-                        >
-                          Edit Draft
-                        </button>
-                        <button
-                          onClick={() => router.push(`/mail-campain/${c.id}/recipients`)}
-                          className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-violet-100 bg-white hover:bg-violet-50 text-violet-700 transition"
-                        >
-                          People
-                        </button>
-                        <button
-                          onClick={() => handleDelete(c)}
-                          className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-100 bg-white hover:bg-red-50 text-red-600 transition"
-                        >
-                          Delete
-                        </button>
-                        <button
-                          onClick={() => handleSend(c)}
-                          disabled={ss.loading}
-                          className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition disabled:opacity-60"
-                        >
-                          {ss.loading ? "Sending…" : "Send"}
-                        </button>
-                      </div>
+                      {/* Only render the actions group if user has at least one action perm */}
+                      {anyRowAction && (
+                        <div className="shrink-0 flex flex-wrap gap-2">
+
+                          {/* ── UPDATE gate: Rename, Edit Draft, People ── */}
+                          {canUpdate && (
+                            <>
+                              <button
+                                onClick={() => { setRenaming(c); setRenameName(c.name); }}
+                                className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition"
+                              >
+                                Rename
+                              </button>
+                              <button
+                                onClick={() => router.push(`/mail-campain/${c.id}/edit`)}
+                                className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-indigo-100 bg-white hover:bg-indigo-50 text-indigo-700 transition"
+                              >
+                                Edit Draft
+                              </button>
+                              <button
+                                onClick={() => router.push(`/mail-campain/${c.id}/recipients`)}
+                                className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-violet-100 bg-white hover:bg-violet-50 text-violet-700 transition"
+                              >
+                                People
+                              </button>
+                            </>
+                          )}
+
+                          {/* ── DELETE gate: Delete button ── */}
+                          {canDelete && (
+                            <button
+                              onClick={() => handleDelete(c)}
+                              className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-100 bg-white hover:bg-red-50 text-red-600 transition"
+                            >
+                              Delete
+                            </button>
+                          )}
+
+                          {/* ── EXECUTE gate: Send button ── */}
+                          {canSend && (
+                            <button
+                              onClick={() => handleSend(c)}
+                              disabled={ss.loading}
+                              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 transition disabled:opacity-60"
+                            >
+                              {ss.loading ? "Sending…" : "Send"}
+                            </button>
+                          )}
+
+                        </div>
+                      )}
                     </div>
 
                     {ss.error && (
@@ -307,8 +344,8 @@ export default function CampaignsPage() {
         </div>
       </div>
 
-      {/* Create modal */}
-      {showCreate && (
+      {/* ── CREATE gate: Create modal ── */}
+      {canCreate && showCreate && (
         <Modal>
           <p className="text-lg font-semibold text-slate-900 mb-1">New Campaign</p>
           <p className="text-sm text-slate-500 mb-4">
@@ -341,8 +378,8 @@ export default function CampaignsPage() {
         </Modal>
       )}
 
-      {/* Rename modal */}
-      {renaming && (
+      {/* ── UPDATE gate: Rename modal ── */}
+      {canUpdate && renaming && (
         <Modal>
           <p className="text-lg font-semibold text-slate-900 mb-1">Rename Campaign</p>
           <p className="text-sm text-slate-500 mb-4">

@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import SideBarLayout from "../components/Side_bar";
 import { apiFetch } from "../lib/api";
-import { usePermissions } from "../hooks/usePermissions"; // ← import
+import { usePermissions } from "../hooks/usePermissions";
 
 const STATUS = {
   TASK: "TASK",
@@ -87,22 +87,19 @@ function matchesQuery(task, q) {
 }
 
 export default function TasksBoardPage() {
-  // ── permissions ──────────────────────────────────────────────────────────
   const { hasPermission, loading: permLoading } = usePermissions();
 
   const canCreate = hasPermission("tasks", "create");
   const canUpdate = hasPermission("tasks", "update");
   const canDelete = hasPermission("tasks", "delete");
-  // tasks:view is handled by the sidebar — no extra gate needed here
 
-  // ── state ─────────────────────────────────────────────────────────────────
   const [board, setBoard]       = useState({ TASK: [], IN_PROGRESS: [], FINISHED: [] });
   const [loading, setLoading]   = useState(true);
   const [err, setErr]           = useState("");
 
-  const [users, setUsers]             = useState([]);
+  const [users, setUsers]               = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
-  const [usersErr, setUsersErr]       = useState("");
+  const [usersErr, setUsersErr]         = useState("");
 
   const [openCreate, setOpenCreate] = useState(false);
   const [creating, setCreating]     = useState(false);
@@ -120,7 +117,6 @@ export default function TasksBoardPage() {
 
   const columns = useMemo(() => [STATUS.TASK, STATUS.IN_PROGRESS, STATUS.FINISHED], []);
 
-  // ── data fetching ─────────────────────────────────────────────────────────
   async function loadBoard() {
     setErr("");
     setLoading(true);
@@ -157,7 +153,6 @@ export default function TasksBoardPage() {
     loadUsers();
   }, []);
 
-  // ── actions ───────────────────────────────────────────────────────────────
   async function moveTask(task, newStatus) {
     try {
       await apiFetch(`/api/tasks/tasks/${task.id}/update/`, {
@@ -196,7 +191,7 @@ export default function TasksBoardPage() {
     e.preventDefault();
     setCreateErr("");
     const deadlineISO = datetimeLocalToISO(form.deadline);
-    if (!deadlineISO)    return setCreateErr("Invalid deadline date/time.");
+    if (!deadlineISO)      return setCreateErr("Invalid deadline date/time.");
     if (!form.assigned_to) return setCreateErr("Please select a user to assign.");
     setCreating(true);
     try {
@@ -228,7 +223,6 @@ export default function TasksBoardPage() {
     return next;
   }, [board, columns, query]);
 
-  // ── render ────────────────────────────────────────────────────────────────
   return (
     <SideBarLayout>
       <div className="min-h-[calc(100vh-40px)] w-full rounded-2xl border border-slate-200 bg-white">
@@ -288,7 +282,6 @@ export default function TasksBoardPage() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* ── CREATE gate: only show + if canCreate ── */}
                         {col === STATUS.TASK && canCreate && (
                           <button
                             onClick={openCreateModal}
@@ -331,8 +324,8 @@ export default function TasksBoardPage() {
                                 </div>
                               </div>
 
-                              {/* ── DELETE gate ── */}
-                              {canDelete && (
+                              {/* ── DELETE: only visible in "To do" column ── */}
+                              {canDelete && col === STATUS.TASK && (
                                 <button
                                   onClick={() => deleteTask(t)}
                                   title="Delete"
@@ -353,7 +346,6 @@ export default function TasksBoardPage() {
                               </div>
                             </div>
 
-                            {/* ── UPDATE gate: hide all move buttons if no update perm ── */}
                             {canUpdate && (
                               <div className="mt-4 flex flex-wrap gap-2">
                                 {col !== STATUS.TASK && (
@@ -467,6 +459,7 @@ export default function TasksBoardPage() {
                   <input
                     type="datetime-local"
                     value={form.deadline}
+min={toDatetimeLocalValue(new Date())}
                     onChange={(e) => setForm((p) => ({ ...p, deadline: e.target.value }))}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300"
                     required

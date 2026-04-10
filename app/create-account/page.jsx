@@ -45,6 +45,11 @@ export default function RegisterPage() {
     e.preventDefault();
     setErrors(null);
 
+    if (strength?.label === "Weak") {
+    setErrors({ password: "Password is too weak. Add uppercase letters, numbers, or symbols." });
+    return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setErrors({ confirmPassword: "Passwords don't match!" });
       return;
@@ -122,9 +127,9 @@ export default function RegisterPage() {
           {/* Feature list */}
           <div className="mt-10 space-y-4">
             {[
-              { icon: "✉️", text: "AI email assistant with tone control" },
-              { icon: "📋", text: "Kanban task board with team roles" },
-              { icon: "📂", text: "Document Q&A with RAG chat" },
+              { text: "AI email assistant with tone control" },
+              { text: "Kanban task board with team roles" },
+              { text: "Document Q&A with RAG chat" },
             ].map((f) => (
               <div key={f.text} className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-lg bg-white/10 grid place-items-center text-base">

@@ -1,36 +1,42 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import SideBarLayout from "../components/Side_bar";
-import { usePermissions } from "../hooks/usePermissions"; // ← import
+import { usePermissions } from "../hooks/usePermissions";
+
+// ─── ↓ INCREASE SIZE HERE to change the max upload limit ───────────────────
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MiB  ← change this number
+// ───────────────────────────────────────────────────────────────────────────
+// Examples:
+//   5 MiB  →  5 * 1024 * 1024
+//   10 MiB → 10 * 1024 * 1024
+//   20 MiB → 20 * 1024 * 1024
 
 function formatBytes(bytes) {
   if (!bytes) return "0 B";
   const sizes = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)}${sizes[i]}`;
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
 }
 
 function FileIcon({ mime }) {
   const m = String(mime || "").toLowerCase();
-  const tone =
-    m.includes("pdf")
-      ? "bg-red-50 text-red-700 ring-red-100"
-      : m.includes("word") || m.includes("doc")
-      ? "bg-blue-50 text-blue-700 ring-blue-100"
-      : m.includes("ppt")
-      ? "bg-amber-50 text-amber-800 ring-amber-100"
-      : "bg-slate-50 text-slate-700 ring-slate-100";
+  const tone = m.includes("pdf")
+    ? "bg-red-50 text-red-700 ring-red-100"
+    : m.includes("word") || m.includes("doc")
+    ? "bg-blue-50 text-blue-700 ring-blue-100"
+    : m.includes("ppt")
+    ? "bg-amber-50 text-amber-800 ring-amber-100"
+    : "bg-slate-50 text-slate-700 ring-slate-100";
 
-  const label =
-    m.includes("pdf")
-      ? "PDF"
-      : m.includes("word") || m.includes("doc")
-      ? "DOC"
-      : m.includes("ppt")
-      ? "PPT"
-      : "FILE";
+  const label = m.includes("pdf")
+    ? "PDF"
+    : m.includes("word") || m.includes("doc")
+    ? "DOC"
+    : m.includes("ppt")
+    ? "PPT"
+    : "FILE";
 
   return (
     <div className={`h-10 w-10 rounded-2xl ring-1 grid place-items-center text-xs font-semibold ${tone}`}>
@@ -41,15 +47,11 @@ function FileIcon({ mime }) {
 
 function Pill({ children, tone = "slate" }) {
   const cls =
-    tone === "green"
-      ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
-      : tone === "blue"
-      ? "bg-blue-50 text-blue-700 ring-blue-100"
-      : tone === "amber"
-      ? "bg-amber-50 text-amber-800 ring-amber-100"
-      : tone === "red"
-      ? "bg-red-50 text-red-700 ring-red-100"
-      : "bg-slate-100 text-slate-700 ring-slate-200";
+    tone === "green" ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+    : tone === "blue" ? "bg-blue-50 text-blue-700 ring-blue-100"
+    : tone === "amber" ? "bg-amber-50 text-amber-800 ring-amber-100"
+    : tone === "red" ? "bg-red-50 text-red-700 ring-red-100"
+    : "bg-slate-100 text-slate-700 ring-slate-200";
 
   return (
     <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ${cls}`}>
@@ -58,7 +60,51 @@ function Pill({ children, tone = "slate" }) {
   );
 }
 
-// ─── File Preview Modal ────────────────────────────────────────────────────────
+// ─── File Size Warning Modal ──────────────────────────────────────────────────
+function FileSizeWarningModal({ fileName, size, onClose }) {
+  // Human-readable version of MAX_FILE_SIZE for the warning message
+  const limitLabel = formatBytes(MAX_FILE_SIZE); // auto-updates when you change MAX_FILE_SIZE
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-10 w-10 rounded-2xl bg-red-50 ring-1 ring-red-100 grid place-items-center text-red-600 shrink-0">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              />
+              <path d="M12 9v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </div>
+          <div>
+            <div className="text-base font-semibold text-slate-900">File too large</div>
+            <div className="text-xs text-slate-500 mt-0.5">Maximum allowed size is {limitLabel}</div>
+          </div>
+        </div>
+
+        <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 mb-5">
+          <p className="text-sm text-red-700 leading-relaxed">
+            <span className="font-semibold break-all">{fileName}</span>
+            {" "}is{" "}
+            <span className="font-semibold">{formatBytes(size)}</span>
+            , which exceeds the {limitLabel} limit. Please compress or choose a smaller file.
+          </p>
+        </div>
+
+        <button
+          onClick={onClose}
+          className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition"
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── File Preview Modal ───────────────────────────────────────────────────────
 function FilePreviewModal({ doc, onClose }) {
   const overlayRef = useRef(null);
   const [previewData, setPreviewData] = useState(null);
@@ -68,7 +114,6 @@ function FilePreviewModal({ doc, onClose }) {
   const [previewError, setPreviewError] = useState(null);
 
   const API_BASE = "http://127.0.0.1:8000";
-
   function getAccessToken() {
     return typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
   }
@@ -133,9 +178,7 @@ function FilePreviewModal({ doc, onClose }) {
           <div className="flex items-center gap-3 min-w-0">
             <FileIcon mime={mime} />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-800 truncate">
-                {previewData?.filename || doc.name}
-              </p>
+              <p className="text-sm font-semibold text-slate-800 truncate">{previewData?.filename || doc.name}</p>
               <p className="text-xs text-slate-500">{mime || "—"}</p>
             </div>
           </div>
@@ -143,27 +186,17 @@ function FilePreviewModal({ doc, onClose }) {
           <div className="flex items-center gap-2 shrink-0">
             {(isText || isImage) && !loadingPreview && !previewError && (
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.1).toFixed(1)))}
-                  className="h-8 w-8 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 transition text-base grid place-items-center"
-                >−</button>
-                <span className="text-xs text-slate-600 w-12 text-center tabular-nums">
-                  {Math.round(zoom * 100)}%
-                </span>
-                <button
-                  onClick={() => setZoom((z) => Math.min(3, +(z + 0.1).toFixed(1)))}
-                  className="h-8 w-8 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 transition text-base grid place-items-center"
-                >+</button>
-                <button
-                  onClick={() => setZoom(1)}
-                  className="px-2 h-8 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-100 transition"
-                >Reset</button>
+                <button onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.1).toFixed(1)))}
+                  className="h-8 w-8 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 transition text-base grid place-items-center">−</button>
+                <span className="text-xs text-slate-600 w-12 text-center tabular-nums">{Math.round(zoom * 100)}%</span>
+                <button onClick={() => setZoom((z) => Math.min(3, +(z + 0.1).toFixed(1)))}
+                  className="h-8 w-8 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 transition text-base grid place-items-center">+</button>
+                <button onClick={() => setZoom(1)}
+                  className="px-2 h-8 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-100 transition">Reset</button>
               </div>
             )}
-            <button
-              onClick={onClose}
-              className="h-8 w-8 rounded-xl bg-slate-100 text-slate-600 hover:bg-red-50 hover:text-red-600 transition grid place-items-center"
-            >
+            <button onClick={onClose}
+              className="h-8 w-8 rounded-xl bg-slate-100 text-slate-600 hover:bg-red-50 hover:text-red-600 transition grid place-items-center">
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
                 <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
@@ -182,7 +215,6 @@ function FilePreviewModal({ doc, onClose }) {
               Loading preview…
             </div>
           )}
-
           {!loadingPreview && previewError && (
             <div className="flex flex-col items-center justify-center w-full h-full gap-3 text-center px-6">
               <div className="h-12 w-12 rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100 grid place-items-center">
@@ -194,36 +226,24 @@ function FilePreviewModal({ doc, onClose }) {
               <p className="text-sm font-medium text-slate-700">{previewError}</p>
             </div>
           )}
-
           {!loadingPreview && !previewError && isPDF && (
             <iframe src={previewData.url} title={previewData.filename} className="w-full h-full border-0" />
           )}
-
           {!loadingPreview && !previewError && isText && textContent !== null && (
             <div className="w-full h-full overflow-auto p-6">
-              <pre
-                className="font-mono text-sm text-slate-800 whitespace-pre-wrap leading-relaxed"
-                style={{
-                  transform: `scale(${zoom})`,
-                  transformOrigin: "top left",
-                  transition: "transform 0.15s ease",
-                  width: `${(1 / zoom) * 100}%`,
-                }}
-              >{textContent}</pre>
+              <pre className="font-mono text-sm text-slate-800 whitespace-pre-wrap leading-relaxed"
+                style={{ transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.15s ease", width: `${(1 / zoom) * 100}%` }}>
+                {textContent}
+              </pre>
             </div>
           )}
-
           {!loadingPreview && !previewError && isImage && (
             <div className="w-full h-full overflow-auto flex items-start justify-center p-6">
-              <img
-                src={previewData.url}
-                alt={previewData.filename}
+              <img src={previewData.url} alt={previewData.filename}
                 style={{ transform: `scale(${zoom})`, transformOrigin: "top center", transition: "transform 0.15s ease", maxWidth: "none" }}
-                className="rounded-lg shadow-md"
-              />
+                className="rounded-lg shadow-md" />
             </div>
           )}
-
           {!loadingPreview && !previewError && isOther && (
             <div className="flex flex-col items-center justify-center w-full h-full gap-4 text-center px-6">
               <div className="h-16 w-16 rounded-2xl bg-slate-100 ring-1 ring-slate-200 grid place-items-center">
@@ -236,12 +256,8 @@ function FilePreviewModal({ doc, onClose }) {
                 <p className="text-sm font-semibold text-slate-800">Browser preview not available for this file type</p>
                 <p className="mt-1 text-xs text-slate-500">Download the file to view it in the appropriate application.</p>
               </div>
-              <a
-                href={previewData?.url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition"
-              >
+              <a href={previewData?.url} target="_blank" rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition">
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
                   <path d="M12 15V3m0 12-4-4m4 4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   <path d="M2 17l.621 2.485A2 2 0 0 0 4.561 21h14.878a2 2 0 0 0 1.94-1.515L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -256,24 +272,22 @@ function FilePreviewModal({ doc, onClose }) {
   );
 }
 
-// ─── Main Dashboard ────────────────────────────────────────────────────────────
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function FileUploadDashboard() {
   const router = useRouter();
 
-  // ── permissions ──────────────────────────────────────────────────────────
   const { hasPermission, loading: permLoading } = usePermissions();
+  const canUpload = hasPermission("files", "create");
+  const canDelete = hasPermission("files", "delete");
+  const canEmbed  = hasPermission("files", "execute");
 
-  const canUpload = hasPermission("files", "create");   // dropzone + add files button
-  const canDelete = hasPermission("files", "delete");   // delete button
-  const canEmbed  = hasPermission("files", "execute");  // upload to AI button
-
-  // ── state ─────────────────────────────────────────────────────────────────
-  const [files, setFiles]                       = useState([]);
-  const [dragActive, setDragActive]             = useState(false);
-  const [loading, setLoading]                   = useState(false);
-  const [initialLoading, setInitialLoading]     = useState(true);
+  const [files, setFiles]                           = useState([]);
+  const [dragActive, setDragActive]                 = useState(false);
+  const [loading, setLoading]                       = useState(false);
+  const [initialLoading, setInitialLoading]         = useState(true);
   const [embeddingLoadingId, setEmbeddingLoadingId] = useState(null);
-  const [previewDoc, setPreviewDoc]             = useState(null);
+  const [previewDoc, setPreviewDoc]                 = useState(null);
+  const [sizeWarnModal, setSizeWarnModal]           = useState(null); // { fileName, size }
   const inputRef = useRef(null);
 
   const [user, setUser] = useState(null);
@@ -300,41 +314,39 @@ export default function FileUploadDashboard() {
         });
         if (!res.ok) { console.error("Failed to load files"); return; }
         const data = await res.json();
-        setFiles(
-          data.map((d) => ({
-            id: d.id,
-            name: d.original_filename,
-            size: d.file_size,
-            mime: d.mime_type,
-            createdAt: d.created_at,
-            fileUrl: d.file_url,
-            uploadedToAI: d.is_embedded ?? false,
-          }))
-        );
+        setFiles(data.map((d) => ({
+          id: d.id,
+          name: d.original_filename,
+          size: d.file_size,
+          mime: d.mime_type,
+          createdAt: d.created_at,
+          fileUrl: d.file_url,
+          uploadedToAI: d.is_embedded ?? false,
+        })));
       } catch (e) {
         console.error("Error loading files:", e);
       } finally {
         setInitialLoading(false);
       }
     }
-
     loadFiles();
   }, []);
 
+  // ── upload — no rename, just size check then direct upload ───────────────
   async function uploadToBackend(fileObj) {
     const token = getAccessToken();
     if (!token) { console.error("No access token"); return null; }
 
-    const wantRename = window.confirm(`Default name is "${fileObj.name}". Do you want to change it?`);
-    let finalName = fileObj.name;
-    if (wantRename) {
-      const input = window.prompt("Enter new file name:", fileObj.name);
-      finalName = input && input.trim() ? input.trim() : fileObj.name;
+    // Size gate — shows custom warning modal, then cancels this file
+    if (fileObj.size > MAX_FILE_SIZE) {
+      setSizeWarnModal({ fileName: fileObj.name, size: fileObj.size });
+      return null; // upload cancelled for this file
     }
 
+    // Direct upload — no rename prompt
     const formData = new FormData();
     formData.append("file", fileObj);
-    formData.append("original_filename", finalName);
+    formData.append("original_filename", fileObj.name);
 
     const res = await fetch(`${API_BASE}/file_upload/upload_file/`, {
       method: "POST",
@@ -354,18 +366,15 @@ export default function FileUploadDashboard() {
       for (const f of Array.from(fileList)) {
         const result = await uploadToBackend(f);
         if (result) {
-          setFiles((prev) => [
-            {
-              id: result.id,
-              name: result.original_filename,
-              size: result.file_size,
-              mime: result.mime_type,
-              createdAt: result.created_at,
-              fileUrl: result.file_url,
-              uploadedToAI: result.is_embedded ?? false,
-            },
-            ...prev,
-          ]);
+          setFiles((prev) => [{
+            id: result.id,
+            name: result.original_filename,
+            size: result.file_size,
+            mime: result.mime_type,
+            createdAt: result.created_at,
+            fileUrl: result.file_url,
+            uploadedToAI: result.is_embedded ?? false,
+          }, ...prev]);
         }
       }
     } finally {
@@ -395,7 +404,6 @@ export default function FileUploadDashboard() {
     if (alreadyEmbedded) return;
     const token = getAccessToken();
     if (!token) return;
-
     try {
       setEmbeddingLoadingId(id);
       const res = await fetch(`${API_BASE}/file_upload/embed_file/`, {
@@ -413,17 +421,22 @@ export default function FileUploadDashboard() {
     }
   }
 
-  const embeddedCount = useMemo(() => files.filter((f) => !!f.uploadedToAI).length, [files]);
-  const totalSize     = useMemo(() => files.reduce((acc, f) => acc + (Number(f.size) || 0), 0), [files]);
-  const username      = user?.username || "You";
-
-  // Whether actions column is needed at all
+  const embeddedCount  = useMemo(() => files.filter((f) => !!f.uploadedToAI).length, [files]);
+  const totalSize      = useMemo(() => files.reduce((acc, f) => acc + (Number(f.size) || 0), 0), [files]);
+  const username       = user?.username || "You";
   const showActionsCol = canDelete || canEmbed;
 
   return (
     <SideBarLayout>
-      {previewDoc && (
-        <FilePreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />
+      {previewDoc && <FilePreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
+
+      {/* Custom size-too-large warning modal */}
+      {sizeWarnModal && (
+        <FileSizeWarningModal
+          fileName={sizeWarnModal.fileName}
+          size={sizeWarnModal.size}
+          onClose={() => setSizeWarnModal(null)}
+        />
       )}
 
       <div className="w-full">
@@ -442,7 +455,6 @@ export default function FileUploadDashboard() {
           </div>
         </div>
 
-        {/* ── UPLOAD gate: hide entire dropzone if no files:create ── */}
         {canUpload && (
           <section
             onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
@@ -458,9 +470,7 @@ export default function FileUploadDashboard() {
                 <div className="flex items-start gap-4">
                   <div className={[
                     "h-14 w-14 rounded-2xl grid place-items-center ring-1",
-                    dragActive
-                      ? "bg-indigo-50 text-indigo-700 ring-indigo-100"
-                      : "bg-slate-50 text-slate-700 ring-slate-200",
+                    dragActive ? "bg-indigo-50 text-indigo-700 ring-indigo-100" : "bg-slate-50 text-slate-700 ring-slate-200",
                   ].join(" ")}>
                     <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none">
                       <path d="M7 16a4 4 0 0 1-.88-7.903A5 5 0 1 1 15.9 6L16 6a5 5 0 0 1 1 9.9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -468,16 +478,22 @@ export default function FileUploadDashboard() {
                       <path d="M8.5 14.5 12 11l3.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
-
                   <div className="min-w-0">
                     <div className="text-base font-semibold text-slate-900">Drag & drop files here</div>
                     <div className="mt-1 text-sm text-slate-500">or click the button to browse from your device.</div>
-                    <div className="mt-3 text-xs text-slate-500">Allowed: PDF, DOCX, PPTX • Max 20MB</div>
+                    {/* ↓ INCREASE SIZE HERE — update MAX_FILE_SIZE at the top of this file, this label updates automatically */}
+                    <div className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
+                      <svg className="h-3.5 w-3.5 text-amber-500 shrink-0" viewBox="0 0 24 24" fill="none">
+                        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+                          stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M12 9v4m0 4h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      </svg>
+                      Allowed: PDF, DOCX, PPTX &nbsp;·&nbsp; Max <strong className="ml-1">{formatBytes(MAX_FILE_SIZE)}</strong> per file
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-start lg:justify-end gap-3">
-                  {/* ── ADD FILES button (also gated by canUpload) ── */}
                   <button
                     type="button"
                     onClick={() => inputRef.current?.click()}
@@ -528,10 +544,7 @@ export default function FileUploadDashboard() {
                   <th className="py-3 px-5">Shared on</th>
                   <th className="py-3 px-5">Size</th>
                   <th className="py-3 px-5">By</th>
-                  {/* Only render Actions <th> if user has at least one action */}
-                  {showActionsCol && (
-                    <th className="py-3 px-5 text-right">Actions</th>
-                  )}
+                  {showActionsCol && <th className="py-3 px-5 text-right">Actions</th>}
                 </tr>
               </thead>
 
@@ -554,22 +567,19 @@ export default function FileUploadDashboard() {
                         </div>
                         <div className="mt-3 text-sm font-semibold text-slate-900">No files yet</div>
                         <div className="mt-1 text-sm text-slate-500">
-                          {canUpload
-                            ? "Upload your first document using the dropzone above."
-                            : "No files have been uploaded yet."}
+                          {canUpload ? "Upload your first document using the dropzone above." : "No files have been uploaded yet."}
                         </div>
                       </div>
                     </td>
                   </tr>
                 ) : (
                   files.map((f) => {
-                    const isEmbedded = !!f.uploadedToAI;
-                    const isLoading  = embeddingLoadingId === f.id;
+                    const isEmbedded    = !!f.uploadedToAI;
+                    const isLoading     = embeddingLoadingId === f.id;
                     const embedDisabled = isEmbedded || isLoading;
 
                     return (
                       <tr key={f.id} className="hover:bg-slate-50/70 transition">
-                        {/* Resource */}
                         <td className="py-4 px-5">
                           <div className="flex items-center gap-3 min-w-0">
                             <FileIcon mime={f.mime} />
@@ -601,12 +611,9 @@ export default function FileUploadDashboard() {
 
                         <td className="py-4 px-5 text-sm text-slate-700">{username}</td>
 
-                        {/* ── Actions column — only rendered if showActionsCol ── */}
                         {showActionsCol && (
                           <td className="py-4 px-5">
                             <div className="flex items-center justify-end gap-2">
-
-                              {/* ── EMBED gate: Upload to AI button ── */}
                               {canEmbed && (
                                 <>
                                   <button
@@ -623,8 +630,6 @@ export default function FileUploadDashboard() {
                                   >
                                     {isEmbedded ? "Embedded" : isLoading ? "Embedding..." : "Upload to AI"}
                                   </button>
-
-                                  {/* Chat arrow — only when embedded */}
                                   {isEmbedded && (
                                     <button
                                       onClick={() => router.push(`/file-upload/chat/${f.id}`)}
@@ -639,7 +644,6 @@ export default function FileUploadDashboard() {
                                 </>
                               )}
 
-                              {/* ── DELETE gate: trash button ── */}
                               {canDelete && (
                                 <button
                                   onClick={() => handleDelete(f.id)}
@@ -647,14 +651,11 @@ export default function FileUploadDashboard() {
                                   className="h-9 w-9 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition grid place-items-center"
                                 >
                                   <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
-                                    <path
-                                      d="M4 7h16M10 11v6m4-6v6M9 7V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1"
-                                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                                    />
+                                    <path d="M4 7h16M10 11v6m4-6v6M9 7V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1"
+                                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                   </svg>
                                 </button>
                               )}
-
                             </div>
                           </td>
                         )}
@@ -665,7 +666,6 @@ export default function FileUploadDashboard() {
               </tbody>
             </table>
           </div>
-
           <div className="px-5 py-4 bg-white" />
         </div>
       </div>

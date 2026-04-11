@@ -363,21 +363,29 @@ export default function RolesPermissionsPage() {
                       <tr key={u.id} className="hover:bg-slate-50/70 transition">
 
                         {/* Name */}
-                        <td className="py-4 px-5">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-full bg-indigo-600 text-white grid place-items-center text-xs font-semibold">
-                              {initialsFrom(u.username || u.email)}
+                      <td className="py-4 px-5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-full bg-indigo-600 text-white grid place-items-center text-xs font-semibold overflow-hidden flex-shrink-0">
+                            {u.profile_picture_url ? (
+                              <img
+                                src={u.profile_picture_url}
+                                alt={u.username || u.email || "User"}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              initialsFrom(u.username || u.email)
+                            )}
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900">
+                              {u.username || u.email || "—"}
                             </div>
-                            <div>
-                              <div className="text-sm font-semibold text-slate-900">
-                                {u.username || "—"}
-                              </div>
-                              <div className="text-xs text-slate-500">
-                                {u.username ? "User" : "—"}
-                              </div>
+                            <div className="text-xs text-slate-500">
+                              {u.username ? "User" : "—"}
                             </div>
                           </div>
-                        </td>
+                        </div>
+                      </td>
 
                         {/* Email */}
                         <td className="py-4 px-5">

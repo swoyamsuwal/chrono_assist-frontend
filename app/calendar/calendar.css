@@ -1,28 +1,50 @@
-/* ========== Widget-like compact FullCalendar ========== */
+/* ===============================================================
+   calendar.css
+   Custom styles that override FullCalendar's default appearance
+   to create an Apple Calendar widget-like look
 
+   TWO STYLE SYSTEMS:
+   1. .fc-apple-widget  → scoped overrides for the mini calendar
+                          (compact cells, circular today highlight,
+                          pill-shaped nav buttons, centered day numbers)
+   2. .fc-black-bar     → custom event rendering (thin black bar
+                          instead of FullCalendar's default colored block)
+   3. [data-fc-tooltip] → CSS-only tooltip on event hover
+
+   All overrides use the .fc-apple-widget parent scope so they
+   don't affect any other FullCalendar instances on the page
+   =============================================================== */
+
+
+/* ── Step 1: CSS Custom Property Overrides ────────────────────────────────── */
+/* FullCalendar reads these variables internally — overriding them here
+   is cleaner than fighting specificity on individual elements              */
 .fc-apple-widget .fc {
-  --fc-border-color: rgba(226, 232, 240, 0.9);
-  --fc-page-bg-color: #ffffff;
-  --fc-neutral-bg-color: #f8fafc;
-  --fc-today-bg-color: rgba(239, 68, 68, 0.10); /* subtle red-ish like Apple */
-  --fc-event-border-color: transparent;
-  --fc-event-text-color: #0f172a;
+  --fc-border-color:      rgba(226, 232, 240, 0.9); /* Softer grid lines */
+  --fc-page-bg-color:     #ffffff;
+  --fc-neutral-bg-color:  #f8fafc;
+  --fc-today-bg-color:    rgba(239, 68, 68, 0.10);  /* Subtle red tint for today's cell */
+  --fc-event-border-color: transparent;              /* Remove default colored event border */
+  --fc-event-text-color:  #0f172a;
 
-  font-size: 12px; /* smaller overall */
+  font-size: 12px; /* Shrinks all internal FullCalendar text uniformly */
 }
 
+
+/* ── Step 2: Toolbar / Header ─────────────────────────────────────────────── */
 .fc-apple-widget .fc .fc-toolbar {
-  margin-bottom: 8px;
+  margin-bottom: 8px; /* Tighter gap between month nav and the day grid */
 }
 
 .fc-apple-widget .fc .fc-toolbar-title {
-  font-size: 18px; /* smaller month text */
+  font-size: 18px;   /* Smaller than FullCalendar's default */
   font-weight: 700;
   color: #0f172a;
 }
 
+/* Pill-shaped prev/next navigation buttons (Apple Calendar style) */
 .fc-apple-widget .fc .fc-button {
-  border-radius: 9999px;
+  border-radius: 9999px;            /* Full pill shape */
   border: 1px solid #e2e8f0;
   background: #fff;
   color: #0f172a;
@@ -31,13 +53,17 @@
   line-height: 1;
 }
 
+
+/* ── Step 3: Day Header Row (Sun / Mon / Tue …) ───────────────────────────── */
 .fc-apple-widget .fc .fc-col-header-cell-cushion {
   padding: 4px 0;
   font-size: 11px;
-  color: #64748b; /* slate-500 */
+  color: #64748b;    /* slate-500 — muted, not competing with date numbers */
   font-weight: 600;
 }
 
+
+/* ── Step 4: Day Cells ────────────────────────────────────────────────────── */
 .fc-apple-widget .fc .fc-daygrid-day-number {
   padding: 6px;
   font-size: 12px;
@@ -45,15 +71,20 @@
   font-weight: 600;
 }
 
+/* Compact cell height — keeps the widget from taking too much vertical space */
 .fc-apple-widget .fc .fc-daygrid-day-frame {
-  min-height: 44px; /* compact cell height */
+  min-height: 44px;
 }
 
+/* Center the day number horizontally (Apple Calendar positions numbers centered) */
 .fc-apple-widget .fc .fc-daygrid-day-top {
-  justify-content: center; /* centered numbers like widget */
+  justify-content: center;
 }
 
-/* Optional: circle highlight for "today" number */
+
+/* ── Step 5: Today Highlight (Red Circle) ─────────────────────────────────── */
+/* Replaces the pale red cell background with a tight red circle
+   around just the day number — matches Apple Calendar's exact behavior   */
 .fc-apple-widget .fc .fc-day-today .fc-daygrid-day-number {
   background: #ef4444;
   color: #fff;
@@ -61,12 +92,15 @@
   width: 26px;
   height: 26px;
   display: grid;
-  place-items: center;
+  place-items: center; /* Perfect centering of the number inside the circle */
   margin: 4px auto 0;
-  padding: 0;
+  padding: 0;          /* Reset default padding so the circle isn't lopsided */
 }
 
-/* Keep your highlighted event days (but lighter + nicer) */
+
+/* ── Step 6: Days With Events (Subtle Background) ─────────────────────────── */
+/* .has-event-day is applied via dayCellClassNames in the React component
+   when a date has at least one event — gives a gentle visual cue          */
 .fc-apple-widget .fc-daygrid-day.has-event-day {
   background: rgba(15, 23, 42, 0.03);
 }
@@ -74,16 +108,20 @@
   background: rgba(15, 23, 42, 0.06);
 }
 
-/* ========== Black bar event style (smaller, more horizontal) ========== */
+
+/* ── Step 7: Event Rendering — Black Bar Style ────────────────────────────── */
+/* Instead of FullCalendar's default colored block, events are shown as
+   a thin centered black bar — compact and non-intrusive in a small widget  */
 .fc-apple-widget .fc .fc-black-bar {
   height: 4px;
   width: 70%;
-  margin: 0 auto;      /* centered bar */
+  margin: 0 auto;      /* Centers the bar within the cell */
   background: #0f172a;
   border-radius: 9999px;
   opacity: 0.95;
 }
 
+/* Strip all default event styles so only the .fc-black-bar div is visible */
 .fc-apple-widget .fc .fc-daygrid-event {
   background: transparent !important;
   border: 0 !important;
@@ -91,23 +129,28 @@
   cursor: pointer;
 }
 
+/* Tight vertical spacing between multiple event bars in the same cell */
 .fc-apple-widget .fc .fc-daygrid-event-harness {
   margin-top: 2px;
 }
 
-/* Tooltip (your existing tooltip, keep it) */
+
+/* ── Step 8: CSS-Only Tooltip on Hover ────────────────────────────────────── */
+/* The React component sets data-fc-tooltip={event.title} on each event element
+   via eventDidMount. This CSS reads that attribute and renders a tooltip
+   without any JS tooltip library.                                            */
 .fc-event[data-fc-tooltip] {
-  position: relative;
+  position: relative; /* Needed so ::after is positioned relative to the event */
 }
 
 .fc-event[data-fc-tooltip]:hover::after {
-  content: attr(data-fc-tooltip);
+  content: attr(data-fc-tooltip); /* Read the tooltip text from the HTML attribute */
   position: absolute;
   z-index: 50;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%); /* Center the tooltip above the event */
   top: -36px;
-  white-space: nowrap;
+  white-space: nowrap;         /* Prevent tooltip text from wrapping */
   background: rgba(15, 23, 42, 0.95);
   color: white;
   padding: 6px 10px;

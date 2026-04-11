@@ -1,24 +1,60 @@
 "use client";
 
+// ===============================================================
+//  app/mail-campain/page.jsx  (campaigns list page)
+//  Lists all bulk-email campaigns with create / rename / delete /
+//  send actions gated behind RBAC permissions.
+//
+//  USER FLOW PER CAMPAIGN:
+//    1. Create campaign (name only)
+//    2. Add recipients  → /mail-campain/:id/recipients
+//    3. Write draft     → /mail-campain/:id/edit
+//    4. Send            → POST /api/mail/campaigns/:id/send/
+//
+//  PERMISSION KEYS USED:
+//    bulk_mail.create   → show "+ New Campaign" button + create modal
+//    bulk_mail.update   → show Rename / Edit Draft / People buttons
+//    bulk_mail.delete   → show Delete button
+//    bulk_mail.execute  → show Send button
+//
+//  BACKEND ENDPOINTS:
+//    GET    /api/mail/campaigns/           → list all campaigns
+//    POST   /api/mail/campaigns/           → create a campaign  { name }
+//    PATCH  /api/mail/campaigns/:id/       → rename             { name }
+//    DELETE /api/mail/campaigns/:id/       → delete campaign
+//    POST   /api/mail/campaigns/:id/send/  → queue bulk send    {}
+// ===============================================================
+
 import React, { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import SideBarLayout from "../components/Side_bar";
 import { usePermissions } from "../hooks/usePermissions";
 
+// ─── API config ───────────────────────────────────────────────────────────────
 const API_BASE = "http://127.0.0.1:8000/api/mail";
 
+// ─── Table pagination ─────────────────────────────────────────────────────────
 const PAGE_SIZE = 8; // ← change to show more/fewer campaigns per page
 
+// ─── Auth helpers ─────────────────────────────────────────────────────────────
+// Reads JWT from localStorage — returns null during SSR to avoid ReferenceError.
 function getAccessToken() {
   return typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
 }
 
+// Builds the base headers object attached to every request:
+//   Content-Type: application/json (always)
+//   Authorization: Bearer <token>  (when logged in)
 function authHeaders() {
   const token = getAccessToken();
   const h = { "Content-Type": "application/json" };
   if (token) h["Authorization"] = `Bearer ${token}`;
   return h;
 }
+
+// ─── API helpers ──────────────────────────────────────────────────────────────
+// All four helpers parse the JSON response and throw a descriptive Error on
+// non-2xx so callers can write: catch (e) { setGlobalError(e.message) }
 
 async function apiGet(path) {
   const res = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
@@ -52,6 +88,8 @@ async function apiPatch(path, payload) {
   return data;
 }
 
+// DELETE responses are often 204 No Content, so we only attempt JSON parsing
+// on failure (to extract the error message).
 async function apiDelete(path) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "DELETE",
@@ -65,9 +103,19 @@ async function apiDelete(path) {
 }
 
 // ─── Pagination ───────────────────────────────────────────────────────────────
+// Reusable pagination bar rendered below the campaign list.
+// Returns null when there is only one page (no controls needed).
+//
+// Props:
+//   page        — current page number (1-based)
+//   totalPages  — total number of pages
+//   total       — total item count (used for the "1–8 of 23 campaigns" label)
+//   onChange(p) — called with the new page number when a button is clicked
 function Pagination({ page, totalPages, total, onChange }) {
   if (totalPages <= 1) return null;
 
+  // Builds the page-number array with "…" ellipsis for large page counts.
+  // e.g. totalPages=12, page=6 → [1, "…", 5, 6, 7, "…", 12]
   function getPages() {
     const pages = [];
     if (totalPages <= 7) {
@@ -84,26 +132,28 @@ function Pagination({ page, totalPages, total, onChange }) {
     return pages;
   }
 
+  // Shared button class fragments composed per button state
   const btnBase     = "h-9 min-w-[36px] px-2 rounded-xl text-sm font-medium transition flex items-center justify-center";
   const btnActive   = "bg-indigo-600 text-white shadow-sm";
   const btnInactive = "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50";
   const btnDisabled = "bg-white border border-slate-200 text-slate-300 cursor-not-allowed";
 
+  // Row range label e.g. "1–8 of 23 campaigns"
   const rangeStart = (page - 1) * PAGE_SIZE + 1;
   const rangeEnd   = Math.min(page * PAGE_SIZE, total);
 
   return (
     <div className="flex items-center justify-between gap-4 px-6 py-4 border-t border-slate-200 bg-white shrink-0">
-      {/* Range label */}
+      {/* Left: item range indicator */}
       <span className="text-xs text-slate-500 tabular-nums">
         <span className="font-semibold text-slate-700">{rangeStart}–{rangeEnd}</span>
         {" "}of{" "}
         <span className="font-semibold text-slate-700">{total}</span> campaigns
       </span>
 
-      {/* Controls */}
+      {/* Right: prev + numbered page buttons + next */}
       <div className="flex items-center gap-1.5">
-        {/* Prev */}
+        {/* Previous page */}
         <button
           onClick={() => onChange(page - 1)}
           disabled={page === 1}
@@ -115,7 +165,7 @@ function Pagination({ page, totalPages, total, onChange }) {
           </svg>
         </button>
 
-        {/* Page numbers */}
+        {/* Page number buttons — "…" is non-interactive */}
         {getPages().map((p, idx) =>
           p === "…" ? (
             <span key={`ellipsis-${idx}`} className="h-9 w-9 flex items-center justify-center text-slate-400 text-sm select-none">
@@ -133,7 +183,7 @@ function Pagination({ page, totalPages, total, onChange }) {
           )
         )}
 
-        {/* Next */}
+        {/* Next page */}
         <button
           onClick={() => onChange(page + 1)}
           disabled={page === totalPages}
@@ -149,6 +199,13 @@ function Pagination({ page, totalPages, total, onChange }) {
   );
 }
 
+// ─── StatusBadge ─────────────────────────────────────────────────────────────
+// Shows a coloured pill summarising whether a campaign is ready to send.
+//
+// Logic:
+//   has_draft=true  + recipient_count>0 → "Ready to send"  (green)
+//   has_draft=false                     → "No draft"       (amber)
+//   recipient_count=0                   → "No recipients"  (red)
 function StatusBadge({ hasDraft, recipientCount }) {
   if (hasDraft && recipientCount > 0)
     return (
@@ -171,6 +228,10 @@ function StatusBadge({ hasDraft, recipientCount }) {
   return null;
 }
 
+// ─── Modal ────────────────────────────────────────────────────────────────────
+// Minimal full-screen overlay wrapper shared by the Create and Rename modals.
+// stopPropagation on the inner card prevents backdrop-click from bubbling up
+// and accidentally triggering parent click handlers.
 function Modal({ children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40">
@@ -184,50 +245,80 @@ function Modal({ children }) {
   );
 }
 
+// ================================================================
+//  Page component: CampaignsPage
+//
+//  State overview:
+//    campaigns        — full list fetched from the backend (all pages)
+//    loading          — true during the initial list fetch
+//    globalError      — shown as a red banner above the list
+//    showCreate       — controls the Create Campaign modal
+//    createName       — controlled input inside the create modal
+//    createLoading    — true while the POST /campaigns/ is in flight
+//    renaming         — campaign object being renamed, or null
+//    renameName       — controlled input inside the rename modal
+//    renameLoading    — true while the PATCH is in flight
+//    sendState        — per-campaign send status: { [id]: { loading, error, msg } }
+//    page             — current pagination page (1-based)
+// ================================================================
 export default function CampaignsPage() {
   const router = useRouter();
 
+  // ── Permission gates ──────────────────────────────────────────
   const { hasPermission, loading: permLoading } = usePermissions();
 
-  const canCreate = hasPermission("bulk_mail", "create");
-  const canUpdate = hasPermission("bulk_mail", "update");
-  const canDelete = hasPermission("bulk_mail", "delete");
-  const canSend   = hasPermission("bulk_mail", "execute");
+  const canCreate = hasPermission("bulk_mail", "create");  // show "+ New Campaign"
+  const canUpdate = hasPermission("bulk_mail", "update");  // show Rename / Edit Draft / People
+  const canDelete = hasPermission("bulk_mail", "delete");  // show Delete button
+  const canSend   = hasPermission("bulk_mail", "execute"); // show Send button
 
-  const [campaigns, setCampaigns]         = useState([]);
-  const [loading, setLoading]             = useState(true);
-  const [globalError, setGlobalError]     = useState("");
+  // ── Campaigns list state ──────────────────────────────────────
+  const [campaigns, setCampaigns]     = useState([]);
+  const [loading, setLoading]         = useState(true);
+  // Global error banner — shown whenever an API call fails
+  const [globalError, setGlobalError] = useState("");
 
+  // ── Create modal state ────────────────────────────────────────
   const [showCreate, setShowCreate]       = useState(false);
   const [createName, setCreateName]       = useState("");
   const [createLoading, setCreateLoading] = useState(false);
 
+  // ── Rename modal state ────────────────────────────────────────
+  // renaming holds the full campaign object so we can show "Current: <name>"
   const [renaming, setRenaming]           = useState(null);
   const [renameName, setRenameName]       = useState("");
   const [renameLoading, setRenameLoading] = useState(false);
 
-  const [sendState, setSendState]         = useState({});
+  // ── Per-campaign send state ───────────────────────────────────
+  // Shape: { [campaignId]: { loading?: bool, error?: string, msg?: string } }
+  // Keyed by campaign id so multiple rows can show independent send feedback.
+  const [sendState, setSendState] = useState({});
 
-  // ── pagination ────────────────────────────────────────────────────────────
+  // ── Pagination ────────────────────────────────────────────────
   const [page, setPage] = useState(1);
 
   const totalPages = Math.max(1, Math.ceil(campaigns.length / PAGE_SIZE));
 
+  // Re-slice on every page or campaigns change without re-fetching
   const pagedCampaigns = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
     return campaigns.slice(start, start + PAGE_SIZE);
   }, [campaigns, page]);
 
+  // Clamps page to valid range — called by the Pagination component
   function handlePageChange(p) {
     setPage(Math.min(Math.max(1, p), totalPages));
   }
 
+  // ── load ──────────────────────────────────────────────────────
+  // Fetches the full campaign list and resets to page 1.
+  // Called on mount and after create/rename to keep the list fresh.
   const load = async () => {
     setLoading(true);
     setGlobalError("");
     try {
       setCampaigns(await apiGet("/campaigns/"));
-      setPage(1); // reset to first page on reload
+      setPage(1); // always land on page 1 after a reload
     } catch (e) {
       setGlobalError(e.message);
     } finally {
@@ -235,8 +326,12 @@ export default function CampaignsPage() {
     }
   };
 
+  // Fetch on mount
   useEffect(() => { load(); }, []);
 
+  // ── handleCreate ──────────────────────────────────────────────
+  // POSTs a new campaign with the given name, closes the modal,
+  // and reloads the list (load() resets to page 1 automatically).
   const handleCreate = async () => {
     if (!createName.trim()) return;
     setCreateLoading(true);
@@ -244,7 +339,7 @@ export default function CampaignsPage() {
       await apiPost("/campaigns/", { name: createName.trim() });
       setShowCreate(false);
       setCreateName("");
-      await load(); // load() already resets to page 1
+      await load();
     } catch (e) {
       setGlobalError(e.message);
     } finally {
@@ -252,6 +347,9 @@ export default function CampaignsPage() {
     }
   };
 
+  // ── handleRename ──────────────────────────────────────────────
+  // PATCHes the campaign name and reloads. renaming is cleared on
+  // success so the modal closes automatically.
   const handleRename = async () => {
     if (!renameName.trim() || !renaming) return;
     setRenameLoading(true);
@@ -266,15 +364,18 @@ export default function CampaignsPage() {
     }
   };
 
+  // ── handleDelete ──────────────────────────────────────────────
+  // Confirms with the user before deleting. On success, removes the
+  // campaign from local state immediately (no re-fetch needed) and
+  // shrinks the page number if the last item on the current page was deleted.
   const handleDelete = async (c) => {
     if (!confirm(`Delete "${c.name}" and all its recipients? This cannot be undone.`)) return;
     try {
       await apiDelete(`/campaigns/${c.id}/`);
-      // shrink page if last item on current page was deleted
       setCampaigns((prev) => {
-        const next = prev.filter((x) => x.id !== c.id);
+        const next     = prev.filter((x) => x.id !== c.id);
         const newTotal = Math.max(1, Math.ceil(next.length / PAGE_SIZE));
-        setPage((p) => Math.min(p, newTotal));
+        setPage((p) => Math.min(p, newTotal)); // don't stay on a now-empty page
         return next;
       });
     } catch (e) {
@@ -282,7 +383,13 @@ export default function CampaignsPage() {
     }
   };
 
+  // ── handleSend ────────────────────────────────────────────────
+  // Guards against sending campaigns that are missing a draft or
+  // have no recipients — shows an inline error on the specific row
+  // instead of a global banner so the user knows exactly what to fix.
+  // On success, updates sendState[c.id].msg with the queued count.
   const handleSend = async (c) => {
+    // Pre-flight checks — show actionable error messages per row
     if (!c.has_draft) {
       setSendState((s) => ({
         ...s,
@@ -297,9 +404,12 @@ export default function CampaignsPage() {
       }));
       return;
     }
+
+    // Mark this row as "sending"
     setSendState((s) => ({ ...s, [c.id]: { loading: true, error: "", msg: "" } }));
     try {
       const res = await apiPost(`/campaigns/${c.id}/send/`, {});
+      // Show a success message with the queued recipient count
       setSendState((s) => ({
         ...s,
         [c.id]: {
@@ -311,13 +421,19 @@ export default function CampaignsPage() {
     }
   };
 
+  // true when at least one row-level action column should be rendered
   const anyRowAction = canUpdate || canDelete || canSend;
 
+  // ── Render ────────────────────────────────────────────────────
   return (
     <SideBarLayout>
+      {/*
+        Outer card uses h-[calc(100vh-40px)] + flex-col so the campaign list
+        fills the available height and the pagination bar stays pinned at the bottom.
+      */}
       <div className="w-full h-[calc(100vh-40px)] rounded-2xl border border-slate-200 bg-white overflow-hidden flex flex-col">
 
-        {/* Header */}
+        {/* ── Page header: title + "+ New Campaign" button ── */}
         <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-slate-200 shrink-0">
           <div>
             <h1 className="text-xl md:text-2xl font-semibold text-slate-900">Email Campaigns</h1>
@@ -325,7 +441,7 @@ export default function CampaignsPage() {
               Create group → add people → write draft → send.
             </p>
           </div>
-
+          {/* Create button — only shown for users with bulk_mail.create */}
           {canCreate && (
             <button
               onClick={() => { setCreateName(""); setShowCreate(true); }}
@@ -336,20 +452,23 @@ export default function CampaignsPage() {
           )}
         </div>
 
+        {/* Global error banner — shown when any API call fails */}
         {globalError && (
           <div className="mx-6 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shrink-0">
             {globalError}
           </div>
         )}
 
-        {/* Scrollable campaign list */}
+        {/* ── Scrollable campaign card list ── */}
         <div className="flex-1 overflow-y-auto px-6 py-6 bg-slate-50 min-h-0">
           <div className="max-w-4xl mx-auto space-y-4">
 
+            {/* Loading state — shown while fetch or permission resolution is in flight */}
             {loading || permLoading ? (
               <p className="text-sm text-slate-500">Loading campaigns…</p>
 
             ) : campaigns.length === 0 ? (
+              // Empty state — message differs based on whether the user can create
               <div className="text-center py-20 text-slate-400">
                 <p className="text-lg font-medium">No campaigns yet.</p>
                 {canCreate && (
@@ -360,12 +479,16 @@ export default function CampaignsPage() {
               </div>
 
             ) : (
+              // ── Campaign cards (current page only) ──
               pagedCampaigns.map((c) => {
+                // Per-row send state — defaults to empty object if not yet interacted with
                 const ss = sendState[c.id] || {};
                 return (
                   <div key={c.id} className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
 
                     <div className="flex items-center justify-between gap-4 flex-wrap">
+
+                      {/* Left: campaign name + status badge + recipient count + subject */}
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-semibold text-slate-900">{c.name}</p>
@@ -377,23 +500,27 @@ export default function CampaignsPage() {
                         </p>
                       </div>
 
+                      {/* Right: action buttons — only rendered when user has at least one permission */}
                       {anyRowAction && (
                         <div className="shrink-0 flex flex-wrap gap-2">
 
                           {canUpdate && (
                             <>
+                              {/* Rename — opens the rename modal pre-filled with current name */}
                               <button
                                 onClick={() => { setRenaming(c); setRenameName(c.name); }}
                                 className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition"
                               >
                                 Rename
                               </button>
+                              {/* Edit Draft — navigates to the draft editor for this campaign */}
                               <button
                                 onClick={() => router.push(`/mail-campain/${c.id}/edit`)}
                                 className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-indigo-100 bg-white hover:bg-indigo-50 text-indigo-700 transition"
                               >
                                 Edit Draft
                               </button>
+                              {/* People — navigates to the recipients manager for this campaign */}
                               <button
                                 onClick={() => router.push(`/mail-campain/${c.id}/recipients`)}
                                 className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-violet-100 bg-white hover:bg-violet-50 text-violet-700 transition"
@@ -403,6 +530,7 @@ export default function CampaignsPage() {
                             </>
                           )}
 
+                          {/* Delete — guarded by a window.confirm to prevent accidental deletion */}
                           {canDelete && (
                             <button
                               onClick={() => handleDelete(c)}
@@ -412,6 +540,7 @@ export default function CampaignsPage() {
                             </button>
                           )}
 
+                          {/* Send — pre-flight checks run inside handleSend before the API call */}
                           {canSend && (
                             <button
                               onClick={() => handleSend(c)}
@@ -421,16 +550,17 @@ export default function CampaignsPage() {
                               {ss.loading ? "Sending…" : "Send"}
                             </button>
                           )}
-
                         </div>
                       )}
                     </div>
 
+                    {/* Per-row inline send error (e.g. "No draft" / "No recipients" / API error) */}
                     {ss.error && (
                       <p className="mt-3 text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 border border-red-200">
                         {ss.error}
                       </p>
                     )}
+                    {/* Per-row inline send success (e.g. "Queued for 24 recipients") */}
                     {ss.msg && (
                       <p className="mt-3 text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 border border-emerald-200">
                         {ss.msg}
@@ -443,7 +573,7 @@ export default function CampaignsPage() {
           </div>
         </div>
 
-        {/* Pagination — pinned to the bottom of the card */}
+        {/* Pagination — pinned to the bottom of the card, hidden during loading */}
         {!loading && !permLoading && campaigns.length > 0 && (
           <Pagination
             page={page}
@@ -452,16 +582,17 @@ export default function CampaignsPage() {
             onChange={handlePageChange}
           />
         )}
-
       </div>
 
-      {/* Create modal */}
+      {/* ── Create Campaign modal ── */}
+      {/* Rendered outside the card so it overlays the entire viewport */}
       {canCreate && showCreate && (
         <Modal>
           <p className="text-lg font-semibold text-slate-900 mb-1">New Campaign</p>
           <p className="text-sm text-slate-500 mb-4">
             Give it a name. Add people and the email draft separately after.
           </p>
+          {/* Enter key submits to match expected keyboard UX */}
           <input
             autoFocus
             type="text"
@@ -478,6 +609,7 @@ export default function CampaignsPage() {
             >
               Cancel
             </button>
+            {/* Disabled until the input has a non-empty value */}
             <button
               onClick={handleCreate}
               disabled={createLoading || !createName.trim()}
@@ -489,10 +621,11 @@ export default function CampaignsPage() {
         </Modal>
       )}
 
-      {/* Rename modal */}
+      {/* ── Rename Campaign modal ── */}
       {canUpdate && renaming && (
         <Modal>
           <p className="text-lg font-semibold text-slate-900 mb-1">Rename Campaign</p>
+          {/* Show the current name so the user knows what they're changing */}
           <p className="text-sm text-slate-500 mb-4">
             Current: <strong>{renaming.name}</strong>
           </p>

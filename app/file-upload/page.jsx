@@ -1,16 +1,41 @@
 "use client";
 
+// ===============================================================
+//  app/file-upload/page.jsx
+//  File upload dashboard — upload, preview, embed, delete files
+//
+//  DEPENDS ON:
+//    - usePermissions()  → hooks/usePermissions.js (RBAC gate)
+//    - SideBarLayout     → components/Side_bar.jsx
+//
+//  PERMISSION KEYS USED:
+//    files.create   → show drag-drop zone + "Add files" button
+//    files.delete   → show delete button per row
+//    files.execute  → show "Upload to AI" + chat button per row
+//
+//  BACKEND ENDPOINTS:
+//    GET  /file_upload/list_files/          → load existing files on mount
+//    POST /file_upload/upload_file/         → upload a new file
+//    DELETE /file_upload/delete_file/       → delete by id
+//    POST /file_upload/embed_file/          → embed a file into the AI vector store
+//    GET  /file_upload/preview_file/:id/    → get a signed preview URL (used inside FilePreviewModal)
+// ===============================================================
+
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import SideBarLayout from "../components/Side_bar";
 import { usePermissions } from "../hooks/usePermissions";
 
-// ─── ↓ INCREASE SIZE HERE to change the max upload limit ───────────────────
+// ─── Upload size limit ────────────────────────────────────────────────────────
+// Change this one constant to update both the enforcement check in uploadToBackend()
+// AND the label shown in the dropzone UI. No other changes needed.
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MiB  ← change this number
-// ───────────────────────────────────────────────────────────────────────────
 
+// ─── Table pagination ─────────────────────────────────────────────────────────
 const PAGE_SIZE = 6; // ← change to show more/fewer rows per page
 
+// ─── Utility: human-readable file size ───────────────────────────────────────
+// Converts raw bytes to "1.4 MB", "320 KB", etc.
 function formatBytes(bytes) {
   if (!bytes) return "0 B";
   const sizes = ["B", "KB", "MB", "GB"];
@@ -18,8 +43,13 @@ function formatBytes(bytes) {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
 }
 
+// ─── FileIcon ─────────────────────────────────────────────────────────────────
+// Renders a colored badge (PDF / DOC / PPT / FILE) based on the MIME type string.
+// Used in both the table rows and the preview modal header.
 function FileIcon({ mime }) {
   const m = String(mime || "").toLowerCase();
+
+  // Color scheme per file type
   const tone = m.includes("pdf")
     ? "bg-red-50 text-red-700 ring-red-100"
     : m.includes("word") || m.includes("doc")
@@ -43,12 +73,15 @@ function FileIcon({ mime }) {
   );
 }
 
+// ─── Pill ─────────────────────────────────────────────────────────────────────
+// Generic colored badge used for stats in the page header and file type column.
+// tone: "green" | "blue" | "amber" | "red" | "slate" (default)
 function Pill({ children, tone = "slate" }) {
   const cls =
-    tone === "green" ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
+    tone === "green"  ? "bg-emerald-50 text-emerald-700 ring-emerald-100"
     : tone === "blue" ? "bg-blue-50 text-blue-700 ring-blue-100"
-    : tone === "amber" ? "bg-amber-50 text-amber-800 ring-amber-100"
-    : tone === "red" ? "bg-red-50 text-red-700 ring-red-100"
+    : tone === "amber"? "bg-amber-50 text-amber-800 ring-amber-100"
+    : tone === "red"  ? "bg-red-50 text-red-700 ring-red-100"
     : "bg-slate-100 text-slate-700 ring-slate-200";
 
   return (
@@ -59,10 +92,13 @@ function Pill({ children, tone = "slate" }) {
 }
 
 // ─── Pagination ───────────────────────────────────────────────────────────────
+// Renders prev / page-numbers / next controls below the files table.
+// Returns null when there is only one page (no need to show controls).
 function Pagination({ page, totalPages, onChange }) {
   if (totalPages <= 1) return null;
 
-  // Build page number array with ellipsis: [1, …, 4, 5, 6, …, 12]
+  // Builds the page-number array with "…" ellipsis for large page counts.
+  // e.g. totalPages=12, page=6 → [1, "…", 5, 6, 7, "…", 12]
   function getPages() {
     const pages = [];
     if (totalPages <= 7) {
@@ -79,26 +115,23 @@ function Pagination({ page, totalPages, onChange }) {
     return pages;
   }
 
-  const btnBase =
-    "h-9 min-w-[36px] px-2 rounded-xl text-sm font-medium transition flex items-center justify-center";
-  const btnActive =
-    "bg-indigo-600 text-white shadow-sm";
-  const btnInactive =
-    "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50";
-  const btnDisabled =
-    "bg-white border border-slate-200 text-slate-300 cursor-not-allowed";
+  // Shared button class fragments — composed per button state
+  const btnBase     = "h-9 min-w-[36px] px-2 rounded-xl text-sm font-medium transition flex items-center justify-center";
+  const btnActive   = "bg-indigo-600 text-white shadow-sm";
+  const btnInactive = "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50";
+  const btnDisabled = "bg-white border border-slate-200 text-slate-300 cursor-not-allowed";
 
   return (
     <div className="flex items-center justify-between gap-4 px-5 py-4 border-t border-slate-100">
-      {/* Left: range info */}
+      {/* Left: current page / total pages indicator */}
       <span className="text-xs text-slate-500 tabular-nums">
         Page <span className="font-semibold text-slate-700">{page}</span> of{" "}
         <span className="font-semibold text-slate-700">{totalPages}</span>
       </span>
 
-      {/* Right: controls */}
+      {/* Right: prev + numbered buttons + next */}
       <div className="flex items-center gap-1.5">
-        {/* Prev */}
+        {/* Previous page */}
         <button
           onClick={() => onChange(page - 1)}
           disabled={page === 1}
@@ -110,7 +143,7 @@ function Pagination({ page, totalPages, onChange }) {
           </svg>
         </button>
 
-        {/* Page numbers */}
+        {/* Page number buttons — "…" rendered as a non-interactive span */}
         {getPages().map((p, idx) =>
           p === "…" ? (
             <span key={`ellipsis-${idx}`} className="h-9 w-9 flex items-center justify-center text-slate-400 text-sm">
@@ -128,7 +161,7 @@ function Pagination({ page, totalPages, onChange }) {
           )
         )}
 
-        {/* Next */}
+        {/* Next page */}
         <button
           onClick={() => onChange(page + 1)}
           disabled={page === totalPages}
@@ -144,13 +177,21 @@ function Pagination({ page, totalPages, onChange }) {
   );
 }
 
-// ─── File Size Warning Modal ──────────────────────────────────────────────────
+// ─── FileSizeWarningModal ─────────────────────────────────────────────────────
+// Shown as a z-[60] overlay (above the preview modal at z-50) when a dropped
+// or selected file exceeds MAX_FILE_SIZE.
+// Props:
+//   fileName — original file name shown in the error message
+//   size     — raw byte size of the rejected file
+//   onClose  — callback to dismiss the modal
 function FileSizeWarningModal({ fileName, size, onClose }) {
   const limitLabel = formatBytes(MAX_FILE_SIZE);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-6">
+
+        {/* Header row: warning icon + title + subtitle */}
         <div className="flex items-center gap-3 mb-4">
           <div className="h-10 w-10 rounded-2xl bg-red-50 ring-1 ring-red-100 grid place-items-center text-red-600 shrink-0">
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
@@ -167,6 +208,7 @@ function FileSizeWarningModal({ fileName, size, onClose }) {
           </div>
         </div>
 
+        {/* Detail box: shows the exact file name and its size vs the limit */}
         <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 mb-5">
           <p className="text-sm text-red-700 leading-relaxed">
             <span className="font-semibold break-all">{fileName}</span>
@@ -175,6 +217,7 @@ function FileSizeWarningModal({ fileName, size, onClose }) {
           </p>
         </div>
 
+        {/* Dismiss button */}
         <button
           onClick={onClose}
           className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition"
@@ -186,31 +229,51 @@ function FileSizeWarningModal({ fileName, size, onClose }) {
   );
 }
 
-// ─── File Preview Modal ───────────────────────────────────────────────────────
+// ─── FilePreviewModal ─────────────────────────────────────────────────────────
+// Full-screen overlay that previews a file in-browser.
+// Supported types and how they render:
+//   PDF      → <iframe src={signedUrl} />
+//   text/*   → <pre> with zoom control, fetches raw text from the signed URL
+//   image/*  → <img> with zoom control
+//   other    → "not supported" state with a direct download link
+//
+// The signed preview URL is fetched from GET /file_upload/preview_file/:id/
+// on mount. Escape key and backdrop-click both close the modal.
+//
+// Props:
+//   doc     — file row object { id, name, mime, ... }
+//   onClose — callback to close the modal
 function FilePreviewModal({ doc, onClose }) {
   const overlayRef = useRef(null);
+
+  // Preview data returned by the API: { url, filename, mime_type }
   const [previewData, setPreviewData] = useState(null);
+  // Raw text content for text/plain files (fetched separately from the signed URL)
   const [textContent, setTextContent] = useState(null);
+  // Zoom level for image and text previews (1 = 100%)
   const [zoom, setZoom] = useState(1);
   const [loadingPreview, setLoadingPreview] = useState(true);
-  const [previewError, setPreviewError] = useState(null);
+  const [previewError, setPreviewError]     = useState(null);
 
   const API_BASE = "http://127.0.0.1:8000";
   function getAccessToken() {
     return typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
   }
 
+  // Close on Escape key
   useEffect(() => {
     const handler = (e) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  // Prevent the page behind the modal from scrolling while it is open
   useEffect(() => {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = ""; };
   }, []);
 
+  // Fetch preview metadata from the backend when the modal mounts
   useEffect(() => {
     if (!doc) return;
     const token = getAccessToken();
@@ -224,6 +287,7 @@ function FilePreviewModal({ doc, onClose }) {
       .then(async (data) => {
         if (data.error) { setPreviewError(data.error); setLoadingPreview(false); return; }
         setPreviewData(data);
+        // For plain-text files, fetch the actual content so we can render it in a <pre>
         if (data.mime_type?.includes("text/plain")) {
           const res = await fetch(data.url);
           setTextContent(await res.text());
@@ -236,13 +300,15 @@ function FilePreviewModal({ doc, onClose }) {
       });
   }, [doc]);
 
+  // Clicking directly on the dark overlay (not the modal card) dismisses the modal
   const handleOverlayClick = (e) => { if (e.target === overlayRef.current) onClose(); };
 
+  // Derive MIME flags for conditional rendering of the correct preview strategy
   const mime    = previewData?.mime_type || doc.mime || "";
   const isPDF   = mime.includes("pdf");
   const isText  = mime.includes("text/plain");
   const isImage = mime.includes("image/");
-  const isOther = !isPDF && !isText && !isImage;
+  const isOther = !isPDF && !isText && !isImage; // fallback: unsupported type
 
   return (
     <div
@@ -250,12 +316,13 @@ function FilePreviewModal({ doc, onClose }) {
       onClick={handleOverlayClick}
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
     >
+      {/* Modal card — stopPropagation prevents overlay-click from firing inside */}
       <div
         className="bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         style={{ width: "92vw", maxWidth: 1000, height: "90vh" }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+        {/* ── Modal header: file name + MIME + zoom controls + close ── */}
         <div className="flex items-center justify-between gap-4 px-5 py-3 border-b border-slate-200 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <FileIcon mime={mime} />
@@ -266,6 +333,7 @@ function FilePreviewModal({ doc, onClose }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Zoom controls — only shown for image and text previews */}
             {(isText || isImage) && !loadingPreview && !previewError && (
               <div className="flex items-center gap-1">
                 <button onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.1).toFixed(1)))}
@@ -277,6 +345,7 @@ function FilePreviewModal({ doc, onClose }) {
                   className="px-2 h-8 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-100 transition">Reset</button>
               </div>
             )}
+            {/* Close button */}
             <button onClick={onClose}
               className="h-8 w-8 rounded-xl bg-slate-100 text-slate-600 hover:bg-red-50 hover:text-red-600 transition grid place-items-center">
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
@@ -286,8 +355,10 @@ function FilePreviewModal({ doc, onClose }) {
           </div>
         </div>
 
-        {/* Body */}
+        {/* ── Modal body: conditionally renders based on file type ── */}
         <div className="flex-1 min-h-0 overflow-hidden bg-slate-50">
+
+          {/* State 1: loading spinner while the preview URL is being fetched */}
           {loadingPreview && (
             <div className="flex items-center justify-center w-full h-full gap-2 text-slate-500 text-sm">
               <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -297,6 +368,8 @@ function FilePreviewModal({ doc, onClose }) {
               Loading preview…
             </div>
           )}
+
+          {/* State 2: error state (API returned an error or fetch failed) */}
           {!loadingPreview && previewError && (
             <div className="flex flex-col items-center justify-center w-full h-full gap-3 text-center px-6">
               <div className="h-12 w-12 rounded-2xl bg-red-50 text-red-600 ring-1 ring-red-100 grid place-items-center">
@@ -308,24 +381,37 @@ function FilePreviewModal({ doc, onClose }) {
               <p className="text-sm font-medium text-slate-700">{previewError}</p>
             </div>
           )}
+
+          {/* State 3: PDF → rendered in an <iframe> using the signed URL */}
           {!loadingPreview && !previewError && isPDF && (
             <iframe src={previewData.url} title={previewData.filename} className="w-full h-full border-0" />
           )}
+
+          {/* State 4: plain text → <pre> with CSS zoom transform */}
           {!loadingPreview && !previewError && isText && textContent !== null && (
             <div className="w-full h-full overflow-auto p-6">
-              <pre className="font-mono text-sm text-slate-800 whitespace-pre-wrap leading-relaxed"
-                style={{ transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.15s ease", width: `${(1 / zoom) * 100}%` }}>
+              <pre
+                className="font-mono text-sm text-slate-800 whitespace-pre-wrap leading-relaxed"
+                style={{ transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.15s ease", width: `${(1 / zoom) * 100}%` }}
+              >
                 {textContent}
               </pre>
             </div>
           )}
+
+          {/* State 5: image → <img> with CSS zoom transform */}
           {!loadingPreview && !previewError && isImage && (
             <div className="w-full h-full overflow-auto flex items-start justify-center p-6">
-              <img src={previewData.url} alt={previewData.filename}
+              <img
+                src={previewData.url}
+                alt={previewData.filename}
                 style={{ transform: `scale(${zoom})`, transformOrigin: "top center", transition: "transform 0.15s ease", maxWidth: "none" }}
-                className="rounded-lg shadow-md" />
+                className="rounded-lg shadow-md"
+              />
             </div>
           )}
+
+          {/* State 6: unsupported type → fallback with a direct download link */}
           {!loadingPreview && !previewError && isOther && (
             <div className="flex flex-col items-center justify-center w-full h-full gap-4 text-center px-6">
               <div className="h-16 w-16 rounded-2xl bg-slate-100 ring-1 ring-slate-200 grid place-items-center">
@@ -338,6 +424,7 @@ function FilePreviewModal({ doc, onClose }) {
                 <p className="text-sm font-semibold text-slate-800">Browser preview not available for this file type</p>
                 <p className="mt-1 text-xs text-slate-500">Download the file to view it in the appropriate application.</p>
               </div>
+              {/* Direct download using the signed URL */}
               <a href={previewData?.url} target="_blank" rel="noreferrer"
                 className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition">
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
@@ -354,25 +441,44 @@ function FilePreviewModal({ doc, onClose }) {
   );
 }
 
-// ─── Main Dashboard ───────────────────────────────────────────────────────────
+// ================================================================
+//  Page component: FileUploadDashboard
+//
+//  Layout structure:
+//    <SideBarLayout>
+//      <page header>          ← title + stat pills (files / embedded / size)
+//      <upload dropzone>      ← only shown when canUpload
+//      <files table>          ← shows all uploaded files with actions
+//        <row actions>        ← Upload to AI / Chat / Delete per row
+//      <pagination>           ← below the table
+//      <FilePreviewModal>     ← z-50 overlay, opened by clicking a file name
+//      <FileSizeWarningModal> ← z-60 overlay, shown when a file exceeds MAX_FILE_SIZE
+// ================================================================
 export default function FileUploadDashboard() {
   const router = useRouter();
 
+  // ── Permission gates ──────────────────────────────────────────
   const { hasPermission, loading: permLoading } = usePermissions();
-  const canUpload = hasPermission("files", "create");
-  const canDelete = hasPermission("files", "delete");
-  const canEmbed  = hasPermission("files", "execute");
+  const canUpload = hasPermission("files", "create");  // show dropzone + upload button
+  const canDelete = hasPermission("files", "delete");  // show delete button per row
+  const canEmbed  = hasPermission("files", "execute"); // show "Upload to AI" + chat button
 
+  // ── Files state ───────────────────────────────────────────────
+  // Normalised file objects: { id, name, size, mime, createdAt, fileUrl, uploadedToAI }
   const [files, setFiles]                           = useState([]);
-  const [dragActive, setDragActive]                 = useState(false);
-  const [loading, setLoading]                       = useState(false);
-  const [initialLoading, setInitialLoading]         = useState(true);
-  const [embeddingLoadingId, setEmbeddingLoadingId] = useState(null);
-  const [previewDoc, setPreviewDoc]                 = useState(null);
-  const [sizeWarnModal, setSizeWarnModal]           = useState(null);
+  const [dragActive, setDragActive]                 = useState(false); // drag-over highlight
+  const [loading, setLoading]                       = useState(false); // true during upload POST
+  const [initialLoading, setInitialLoading]         = useState(true);  // true during first list fetch
+  const [embeddingLoadingId, setEmbeddingLoadingId] = useState(null);  // id of row currently being embedded
+  const [previewDoc, setPreviewDoc]                 = useState(null);  // file object to preview, or null
+  const [sizeWarnModal, setSizeWarnModal]           = useState(null);  // { fileName, size } or null
   const [page, setPage]                             = useState(1);
+
+  // Hidden <input type="file"> triggered by the "Add files" button
   const inputRef = useRef(null);
 
+  // ── Current user ──────────────────────────────────────────────
+  // Read from localStorage (set at login) — used for the "By" column
   const [user, setUser] = useState(null);
   const API_BASE = "http://127.0.0.1:8000";
 
@@ -380,12 +486,16 @@ export default function FileUploadDashboard() {
     return typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
   }
 
+  // Hydrate user from localStorage on mount (client-only)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem("user");
     if (stored) { try { setUser(JSON.parse(stored)); } catch { setUser(null); } }
   }, []);
 
+  // ── Load existing files on mount ─────────────────────────────
+  // Fetches GET /file_upload/list_files/ and normalises the response
+  // into the local file shape used throughout this component.
   useEffect(() => {
     const token = getAccessToken();
     if (!token) { setInitialLoading(false); return; }
@@ -398,12 +508,12 @@ export default function FileUploadDashboard() {
         if (!res.ok) { console.error("Failed to load files"); return; }
         const data = await res.json();
         setFiles(data.map((d) => ({
-          id: d.id,
-          name: d.original_filename,
-          size: d.file_size,
-          mime: d.mime_type,
-          createdAt: d.created_at,
-          fileUrl: d.file_url,
+          id:           d.id,
+          name:         d.original_filename,
+          size:         d.file_size,
+          mime:         d.mime_type,
+          createdAt:    d.created_at,
+          fileUrl:      d.file_url,
           uploadedToAI: d.is_embedded ?? false,
         })));
       } catch (e) {
@@ -415,23 +525,29 @@ export default function FileUploadDashboard() {
     loadFiles();
   }, []);
 
-  // ── pagination derived values ─────────────────────────────────────────────
-  const totalPages  = Math.max(1, Math.ceil(files.length / PAGE_SIZE));
-  const pagedFiles  = useMemo(() => {
+  // ── Pagination derived values ─────────────────────────────────
+  // totalPages and pagedFiles are re-computed only when files or page changes.
+  const totalPages = Math.max(1, Math.ceil(files.length / PAGE_SIZE));
+  const pagedFiles = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
     return files.slice(start, start + PAGE_SIZE);
   }, [files, page]);
 
-  // Reset to page 1 whenever a new file is added (it lands at the top)
+  // Clamps page to valid range — called by the Pagination component
   function handlePageChange(p) {
     setPage(Math.min(Math.max(1, p), totalPages));
   }
 
-  // ── upload ────────────────────────────────────────────────────────────────
+  // ── Upload helpers ────────────────────────────────────────────
+
+  // Validates the file size and POSTs to /file_upload/upload_file/.
+  // Returns the parsed response object on success, or null on failure.
+  // If the file exceeds MAX_FILE_SIZE, shows the warning modal instead of uploading.
   async function uploadToBackend(fileObj) {
     const token = getAccessToken();
     if (!token) { console.error("No access token"); return null; }
 
+    // Reject oversized files before sending anything to the server
     if (fileObj.size > MAX_FILE_SIZE) {
       setSizeWarnModal({ fileName: fileObj.name, size: fileObj.size });
       return null;
@@ -453,6 +569,8 @@ export default function FileUploadDashboard() {
     return data;
   }
 
+  // Iterates over a FileList (from drop or <input>), uploads each one in sequence,
+  // and prepends successful results to the files array so they appear at the top.
   async function onFilesAdded(fileList) {
     setLoading(true);
     try {
@@ -460,15 +578,15 @@ export default function FileUploadDashboard() {
         const result = await uploadToBackend(f);
         if (result) {
           setFiles((prev) => [{
-            id: result.id,
-            name: result.original_filename,
-            size: result.file_size,
-            mime: result.mime_type,
-            createdAt: result.created_at,
-            fileUrl: result.file_url,
+            id:           result.id,
+            name:         result.original_filename,
+            size:         result.file_size,
+            mime:         result.mime_type,
+            createdAt:    result.created_at,
+            fileUrl:      result.file_url,
             uploadedToAI: result.is_embedded ?? false,
           }, ...prev]);
-          setPage(1); // jump to first page so user sees the new file immediately
+          setPage(1); // jump to page 1 so the new file is immediately visible
         }
       }
     } finally {
@@ -476,12 +594,18 @@ export default function FileUploadDashboard() {
     }
   }
 
+  // Handles the dragover → drop → file extraction flow.
+  // canUpload guard prevents non-privileged users from dropping files.
   function handleDrop(e) {
     e.preventDefault();
     setDragActive(false);
     if (canUpload && e.dataTransfer.files?.length) onFilesAdded(e.dataTransfer.files);
   }
 
+  // ── Row actions ───────────────────────────────────────────────
+
+  // Sends DELETE /file_upload/delete_file/ with the file id.
+  // Removes the file from local state and adjusts page if needed.
   async function handleDelete(id) {
     const token = getAccessToken();
     if (!token) return;
@@ -493,19 +617,22 @@ export default function FileUploadDashboard() {
     if (!res.ok) { console.error("Delete failed"); return; }
     setFiles((prev) => {
       const next = prev.filter((f) => f.id !== id);
-      // If deleting the last item on the current page, go back one page
+      // If the last item on the current page was just deleted, go back one page
       const newTotalPages = Math.max(1, Math.ceil(next.length / PAGE_SIZE));
       setPage((p) => Math.min(p, newTotalPages));
       return next;
     });
   }
 
+  // Sends POST /file_upload/embed_file/ to embed the file into the AI vector store.
+  // Once embedded, the button turns into a permanent "Embedded" badge
+  // and a "Chat →" button appears next to it.
   async function handleUploadToAI(id, alreadyEmbedded) {
-    if (alreadyEmbedded) return;
+    if (alreadyEmbedded) return; // no-op — already embedded files can't be re-embedded
     const token = getAccessToken();
     if (!token) return;
     try {
-      setEmbeddingLoadingId(id);
+      setEmbeddingLoadingId(id); // show "Embedding..." label on this specific row
       const res = await fetch(`${API_BASE}/file_upload/embed_file/`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -513,6 +640,7 @@ export default function FileUploadDashboard() {
       });
       if (!res.ok) { console.error("Embedding failed"); return; }
       await res.json().catch(() => ({}));
+      // Mark file as embedded in local state so the UI updates immediately
       setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, uploadedToAI: true } : f)));
     } catch (e) {
       console.error("Error embedding file:", e);
@@ -521,19 +649,24 @@ export default function FileUploadDashboard() {
     }
   }
 
+  // ── Derived display values ────────────────────────────────────
   const embeddedCount  = useMemo(() => files.filter((f) => !!f.uploadedToAI).length, [files]);
   const totalSize      = useMemo(() => files.reduce((acc, f) => acc + (Number(f.size) || 0), 0), [files]);
   const username       = user?.username || "You";
+  // Controls whether the Actions column is rendered at all
   const showActionsCol = canDelete || canEmbed;
 
-  // Row range label e.g. "1 – 6 of 14"
+  // Row range label shown in the table header bar e.g. "1–6 of 14"
   const rangeStart = files.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const rangeEnd   = Math.min(page * PAGE_SIZE, files.length);
 
+  // ── Render ────────────────────────────────────────────────────
   return (
     <SideBarLayout>
+      {/* File preview modal — rendered at z-50, only when a file name is clicked */}
       {previewDoc && <FilePreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
 
+      {/* File-too-large warning modal — z-60, rendered on top of everything */}
       {sizeWarnModal && (
         <FileSizeWarningModal
           fileName={sizeWarnModal.fileName}
@@ -543,7 +676,8 @@ export default function FileUploadDashboard() {
       )}
 
       <div className="w-full">
-        {/* Header */}
+
+        {/* ── Page header: title + stat pills ── */}
         <div className="flex items-start justify-between gap-4 mb-6">
           <div className="min-w-0">
             <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">File Upload</h1>
@@ -551,6 +685,7 @@ export default function FileUploadDashboard() {
               Upload resources, embed them to AI, and manage your library.
             </p>
           </div>
+          {/* Quick-glance stats: total files / embedded count / total storage used */}
           <div className="shrink-0 flex items-center gap-2">
             <Pill tone="blue">{files.length} files</Pill>
             <Pill tone="green">{embeddedCount} embedded</Pill>
@@ -558,6 +693,7 @@ export default function FileUploadDashboard() {
           </div>
         </div>
 
+        {/* ── Drag-drop upload zone — only shown when canUpload ── */}
         {canUpload && (
           <section
             onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
@@ -565,15 +701,20 @@ export default function FileUploadDashboard() {
             onDrop={handleDrop}
             className={[
               "rounded-2xl border bg-white shadow-sm",
+              // Ring highlight on drag-over for clear visual feedback
               dragActive ? "border-indigo-300 ring-4 ring-indigo-50" : "border-slate-200",
             ].join(" ")}
           >
             <div className="p-6">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+
+                {/* Left: upload icon + instructions + file type / size limit notice */}
                 <div className="flex items-start gap-4">
                   <div className={[
                     "h-14 w-14 rounded-2xl grid place-items-center ring-1",
-                    dragActive ? "bg-indigo-50 text-indigo-700 ring-indigo-100" : "bg-slate-50 text-slate-700 ring-slate-200",
+                    dragActive
+                      ? "bg-indigo-50 text-indigo-700 ring-indigo-100"
+                      : "bg-slate-50 text-slate-700 ring-slate-200",
                   ].join(" ")}>
                     <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none">
                       <path d="M7 16a4 4 0 0 1-.88-7.903A5 5 0 1 1 15.9 6L16 6a5 5 0 0 1 1 9.9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -584,7 +725,7 @@ export default function FileUploadDashboard() {
                   <div className="min-w-0">
                     <div className="text-base font-semibold text-slate-900">Drag & drop files here</div>
                     <div className="mt-1 text-sm text-slate-500">or click the button to browse from your device.</div>
-                    {/* ↓ INCREASE SIZE HERE — update MAX_FILE_SIZE at the top, label auto-updates */}
+                    {/* Max size label auto-updates when MAX_FILE_SIZE constant changes at the top */}
                     <div className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
                       <svg className="h-3.5 w-3.5 text-amber-500 shrink-0" viewBox="0 0 24 24" fill="none">
                         <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
@@ -596,6 +737,7 @@ export default function FileUploadDashboard() {
                   </div>
                 </div>
 
+                {/* Right: "Add files" button — triggers the hidden <input> */}
                 <div className="flex items-center justify-start lg:justify-end gap-3">
                   <button
                     type="button"
@@ -608,6 +750,7 @@ export default function FileUploadDashboard() {
                     </svg>
                     {loading ? "Uploading..." : "Add files"}
                   </button>
+                  {/* Hidden file input — multiple allowed, all file types accepted */}
                   <input
                     type="file"
                     multiple
@@ -619,6 +762,7 @@ export default function FileUploadDashboard() {
               </div>
             </div>
 
+            {/* Dashed drop-target area shown below the instructions row */}
             <div className="px-6 pb-6">
               <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center text-sm text-slate-600">
                 {dragActive ? (
@@ -631,10 +775,10 @@ export default function FileUploadDashboard() {
           </section>
         )}
 
-        {/* Files table */}
+        {/* ── Files table ── */}
         <div className={`${canUpload ? "mt-6" : ""} rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden`}>
 
-          {/* Table header bar */}
+          {/* Table header bar: title + row-range counter */}
           <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
             <div className="text-base font-semibold text-slate-900">Uploaded Files</div>
             {files.length > 0 && (
@@ -653,18 +797,23 @@ export default function FileUploadDashboard() {
                   <th className="py-3 px-5">Shared on</th>
                   <th className="py-3 px-5">Size</th>
                   <th className="py-3 px-5">By</th>
+                  {/* Actions column only shown when the user has delete or embed permission */}
                   {showActionsCol && <th className="py-3 px-5 text-right">Actions</th>}
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
+
+                {/* Loading state — shown during initial fetch or while permissions resolve */}
                 {initialLoading || permLoading ? (
                   <tr>
                     <td colSpan={showActionsCol ? 6 : 5} className="py-10 px-5 text-sm text-slate-500">
                       Loading files...
                     </td>
                   </tr>
+
                 ) : files.length === 0 ? (
+                  // Empty state — message differs based on whether the user can upload
                   <tr>
                     <td colSpan={showActionsCol ? 6 : 5} className="py-12 px-5">
                       <div className="flex flex-col items-center text-center">
@@ -676,19 +825,25 @@ export default function FileUploadDashboard() {
                         </div>
                         <div className="mt-3 text-sm font-semibold text-slate-900">No files yet</div>
                         <div className="mt-1 text-sm text-slate-500">
-                          {canUpload ? "Upload your first document using the dropzone above." : "No files have been uploaded yet."}
+                          {canUpload
+                            ? "Upload your first document using the dropzone above."
+                            : "No files have been uploaded yet."}
                         </div>
                       </div>
                     </td>
                   </tr>
+
                 ) : (
+                  // ── File rows (current page only) ──
                   pagedFiles.map((f) => {
                     const isEmbedded    = !!f.uploadedToAI;
-                    const isLoading     = embeddingLoadingId === f.id;
-                    const embedDisabled = isEmbedded || isLoading;
+                    const isLoading     = embeddingLoadingId === f.id; // this specific row is embedding
+                    const embedDisabled = isEmbedded || isLoading;    // prevent double-click
 
                     return (
                       <tr key={f.id} className="hover:bg-slate-50/70 transition">
+
+                        {/* Resource: file icon + clickable name (opens preview) + MIME subtext */}
                         <td className="py-4 px-5">
                           <div className="flex items-center gap-3 min-w-0">
                             <FileIcon mime={f.mime} />
@@ -706,25 +861,32 @@ export default function FileUploadDashboard() {
                           </div>
                         </td>
 
+                        {/* Type: subtype extracted from MIME (e.g. "pdf", "vnd.openxmlformats..." → uppercase) */}
                         <td className="py-4 px-5">
                           <Pill tone="slate">
                             {(f.mime || "—").split("/")[1]?.toUpperCase?.() || "—"}
                           </Pill>
                         </td>
 
+                        {/* Upload date */}
                         <td className="py-4 px-5 text-sm text-slate-700">
                           {f.createdAt ? new Date(f.createdAt).toLocaleString() : "—"}
                         </td>
 
+                        {/* File size */}
                         <td className="py-4 px-5 text-sm text-slate-700">{formatBytes(f.size)}</td>
 
+                        {/* Uploader — read from localStorage user object */}
                         <td className="py-4 px-5 text-sm text-slate-700">{username}</td>
 
+                        {/* ── Row actions: Embed to AI + Chat + Delete ── */}
                         {showActionsCol && (
                           <td className="py-4 px-5">
                             <div className="flex items-center justify-end gap-2">
+
                               {canEmbed && (
                                 <>
+                                  {/* Embed button: switches to a green "Embedded" badge once done */}
                                   <button
                                     onClick={() => handleUploadToAI(f.id, isEmbedded)}
                                     disabled={embedDisabled}
@@ -739,6 +901,8 @@ export default function FileUploadDashboard() {
                                   >
                                     {isEmbedded ? "Embedded" : isLoading ? "Embedding..." : "Upload to AI"}
                                   </button>
+
+                                  {/* Chat button — only appears after the file has been embedded */}
                                   {isEmbedded && (
                                     <button
                                       onClick={() => router.push(`/file-upload/chat/${f.id}`)}
@@ -753,6 +917,7 @@ export default function FileUploadDashboard() {
                                 </>
                               )}
 
+                              {/* Delete button — only shown for canDelete users */}
                               {canDelete && (
                                 <button
                                   onClick={() => handleDelete(f.id)}
@@ -776,7 +941,7 @@ export default function FileUploadDashboard() {
             </table>
           </div>
 
-          {/* Pagination — rendered below the table */}
+          {/* Pagination — rendered below the table, hidden during loading and when list is empty */}
           {!initialLoading && !permLoading && files.length > 0 && (
             <Pagination
               page={page}

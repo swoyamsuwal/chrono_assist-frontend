@@ -1,4 +1,5 @@
 import Header from "./components/Header_first";
+import Image    from "next/image";
 import Link from "next/link";
 
 export default function LandingPage() {
@@ -208,16 +209,20 @@ export default function LandingPage() {
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-900">Email sent!</div>
-                  <div className="text-xs text-slate-500">AI drafted in 2s</div>
+                  <div className="text-xs text-slate-500">AI drafted</div>
                 </div>
               </div>
 
               {/* Floating badge 2 */}
               <div className="absolute -top-4 -right-4 rounded-2xl border border-slate-200 bg-white shadow-lg px-4 py-3 flex items-center gap-3">
                 <div className="h-9 w-9 rounded-xl bg-indigo-50 ring-1 ring-indigo-100 grid place-items-center text-indigo-600">
-                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
-                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                     <Image
+                               src="/vercel.png"
+                               alt="Vercel Logo"
+                               width={35}
+                               height={35}
+                               className="object-contain"
+                             />
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-900">10× faster</div>

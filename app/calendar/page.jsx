@@ -1,27 +1,78 @@
-"use client";
+// ===============================================================
+//  app/calendar/page.jsx (CalendarPage)
+//  Google Calendar integration UI with AI prompt interface
+//
+//  PAGE OVERVIEW:
+//  ┌─────────────────────────────────────────────────────────┐
+//  │ Header: title + "Connect Google Calendar" button        │
+//  │ Message Banner: success/error feedback                  │
+//  ├──────────────────┬──────────────────────────────────────┤
+//  │ Mini Calendar    │ Upcoming Events Panel                │
+//  │ (FullCalendar    │ (date-filtered list of events        │
+//  │  dayGridMonth)   │  with Today/Tomorrow/In X days tags) │
+//  ├──────────────────┴──────────────────────────────────────┤
+//  │ AI Prompt Panel (only if calendar:execute permission)   │
+//  │ Preset cards + free-text textarea + Send button         │
+//  └─────────────────────────────────────────────────────────┘
+//
+//  PERMISSION MODEL:
+//  calendar:view   → everyone who reaches this page (handled by sidebar)
+//                    can see the calendar and upcoming events
+//  calendar:execute→ required to see and use the AI prompt section
+//
+//  DATA FLOW:
+//  Django /api/calendar/events/ → evToFullCalendar() → FullCalendar events[]
+//  User types prompt → sendPrompt() → Django /api/calendar/ai-prompt/ → LLaMA
+//  → Google Calendar API → fetchEvents() re-syncs the UI
+// ===============================================================
+
+
+// ---------------- Step 0: Imports ----------------
+"use client"; // Next.js App Router — this component uses client-side hooks
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import timeGridPlugin from "@fullcalendar/timegrid";
-import interactionPlugin from "@fullcalendar/interaction";
-import SideBarLayout from "../components/Side_bar";
-import { usePermissions } from "../hooks/usePermissions";
-import axios from "axios";
-import "./calendar.css";
+import dayGridPlugin    from "@fullcalendar/daygrid";       // Monthly grid view
+import timeGridPlugin   from "@fullcalendar/timegrid";      // Week/day time grid (available but not default here)
+import interactionPlugin from "@fullcalendar/interaction";  // Enables dateClick and eventClick
+import SideBarLayout    from "../components/Side_bar";
+import { usePermissions } from "../hooks/usePermissions";   // RBAC hook
+import axios            from "axios";
+import "./calendar.css"; // Apple widget styles + event bar + tooltip
+
 
 const API_BASE = "http://127.0.0.1:8000";
 
+
+// ================================================================
+//  Utility 1: fmtTimeRange
+//  Formats a start + end datetime pair into a human-readable time string
+//  Used in the Upcoming panel event cards
+//
+//  Examples:
+//   "10:00 AM - 11:00 AM"
+//   "3:30 PM" (if no end time)
+// ================================================================
 function fmtTimeRange(start, end) {
   const s = start ? new Date(start) : null;
   const e = end   ? new Date(end)   : null;
   if (!s) return "";
   const opt = { hour: "numeric", minute: "2-digit" };
-  const a = s.toLocaleTimeString([], opt);
+  const a = s.toLocaleTimeString([], opt); // e.g., "10:00 AM"
   const b = e ? e.toLocaleTimeString([], opt) : "";
   return b ? `${a} - ${b}` : a;
 }
 
+
+// ================================================================
+//  Utility 2: ymd
+//  Converts any date-like value to a "YYYY-MM-DD" string
+//  Used as a consistent key for date comparisons throughout the page
+//
+//  Why not toISOString().slice(0,10)?
+//  toISOString() returns UTC date — ymd() uses local date so
+//  "today" matches the user's actual local calendar date
+// ================================================================
 function ymd(dateLike) {
   const d = new Date(dateLike);
   if (Number.isNaN(d.getTime())) return null;
@@ -29,6 +80,18 @@ function ymd(dateLike) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+
+// ================================================================
+//  Component: PresetCard
+//  A clickable card that inserts a template prompt into the textarea
+//  Shown in the AI Prompt section as quick-start shortcuts
+//
+//  Props:
+//   title       → card heading (e.g., "Event", "Meeting", "Reminder")
+//   description → subtitle shown under the title
+//   icon        → inline SVG icon displayed in the card
+//   onClick     → called when the card is clicked (inserts the preset)
+// ================================================================
 function PresetCard({ title, description, icon, onClick }) {
   return (
     <button
@@ -37,6 +100,7 @@ function PresetCard({ title, description, icon, onClick }) {
       className="group text-left rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md hover:border-slate-300 transition"
     >
       <div className="flex items-start gap-3">
+        {/* Icon container — teal tint on group hover */}
         <div className="h-10 w-10 rounded-2xl bg-slate-50 ring-1 ring-slate-200 grid place-items-center text-slate-700 group-hover:text-indigo-700 group-hover:ring-indigo-100 group-hover:bg-indigo-50 transition">
           {icon}
         </div>
@@ -49,29 +113,41 @@ function PresetCard({ title, description, icon, onClick }) {
   );
 }
 
+
+// ================================================================
+//  Page Component: CalendarPage
+//  Main calendar page — fetches events, renders the FullCalendar widget,
+//  the upcoming events list, and (if permitted) the AI prompt panel
+// ================================================================
 export default function CalendarPage() {
-  // ── permissions ────────────────────────────────────────────────────────────
+
+  // ── Step 1: RBAC Permissions ──────────────────────────────────────────────
   const { hasPermission, loading: permLoading } = usePermissions();
 
-  // Only the AI Prompt section is gated behind calendar:execute.
-  // "Connect Google Calendar" is always visible to anyone with calendar:view
-  // (view is already handled by the sidebar — if they can reach this page they can connect).
+  // canExecute gates the AI prompt panel
+  // calendar:view is implicit (sidebar already handles page access)
   const canExecute = hasPermission("calendar", "execute");
 
-  // ── state ──────────────────────────────────────────────────────────────────
-  const [events, setEvents]         = useState([]);
-  const [prompt, setPrompt]         = useState("");
-  const [message, setMessage]       = useState("");
-  const [loading, setLoading]       = useState(false);
-  const [user, setUser]             = useState(null);
-  const [filterDate, setFilterDate] = useState("");
-  const calendarRef = useRef(null);
 
+  // ── Step 2: Component State ───────────────────────────────────────────────
+  const [events, setEvents]         = useState([]);   // FullCalendar event objects
+  const [prompt, setPrompt]         = useState("");   // AI prompt textarea value
+  const [message, setMessage]       = useState("");   // Banner feedback message
+  const [loading, setLoading]       = useState(false);// Disables buttons during API calls
+  const [user, setUser]             = useState(null); // Logged-in user from localStorage
+  const [filterDate, setFilterDate] = useState("");   // "YYYY-MM-DD" — filters upcoming list
+  const calendarRef = useRef(null);                   // FullCalendar imperative API ref
+
+
+  // ── Step 3: Axios Instance with JWT Interceptor ───────────────────────────
+  // Creates a pre-configured axios instance that automatically attaches
+  // the JWT access token from localStorage to every request's Authorization header
   const api = axios.create({ baseURL: API_BASE });
 
   api.interceptors.request.use(
     (config) => {
       if (typeof window !== "undefined") {
+        // typeof window check → prevents SSR crash (Next.js runs on server too)
         const token = localStorage.getItem("accessToken");
         if (token) config.headers.Authorization = `Bearer ${token}`;
       }
@@ -80,6 +156,10 @@ export default function CalendarPage() {
     (error) => Promise.reject(error)
   );
 
+
+  // ── Step 4: Load User from localStorage ───────────────────────────────────
+  // Reads the cached user object set during login
+  // Used for display purposes (not for auth — that's handled by the JWT token)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = localStorage.getItem("user");
@@ -88,31 +168,45 @@ export default function CalendarPage() {
     }
   }, []);
 
+
+  // ── Step 5: Fetch Events on Mount ─────────────────────────────────────────
   useEffect(() => {
     fetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+
+  // ── Step 6: Google Event → FullCalendar Format Mapper ─────────────────────
+  // Google Calendar API returns events with nested start/end objects:
+  //   { start: { dateTime: "...", date: "..." }, summary: "..." }
+  // FullCalendar expects:
+  //   { id, title, start, end, extendedProps }
+  // extendedProps stores the original Google event for detail display
   function evToFullCalendar(ev) {
-    const start = ev.start?.dateTime || ev.start?.date;
+    const start = ev.start?.dateTime || ev.start?.date; // dateTime for timed events, date for all-day
     const end   = ev.end?.dateTime   || ev.end?.date;
     return {
       id: ev.id,
       title: ev.summary || "(no title)",
       start,
       end,
-      extendedProps: ev,
+      extendedProps: ev, // Preserves full Google event (location, conferenceData, etc.)
     };
   }
 
+
+  // ── Step 7: Fetch Events from Django ──────────────────────────────────────
+  // Calls /api/calendar/events/ → Django loads Google Calendar API with stored credentials
+  // Maps the raw Google events to FullCalendar format and updates state
   async function fetchEvents() {
     setLoading(true);
     try {
       const res = await api.get(`/api/calendar/events/`);
       setEvents(res.data.map(evToFullCalendar));
-      setMessage("");
+      setMessage(""); // Clear any previous error message on success
     } catch (err) {
       console.error(err);
+      // Show a helpful message — most common cause is no Google credentials yet
       setMessage(
         err?.response?.data?.detail ||
           "Error loading events. Connect your Google account."
@@ -122,25 +216,39 @@ export default function CalendarPage() {
     }
   }
 
+
+  // ── Step 8: Start Google OAuth Flow ───────────────────────────────────────
+  // Calls /api/calendar/google/login/ → Django generates the Google consent URL
+  // We redirect the user's browser to that URL to complete OAuth
+  // After consent, Google redirects to /google/callback/ → Django saves tokens
+  // → browser is then sent back to Next.js /calendar?connected=1
   async function handleConnect() {
     try {
       const res = await api.get(`/api/calendar/google/login/`);
-      window.location.href = res.data.auth_url;
+      window.location.href = res.data.auth_url; // Full-page redirect to Google consent screen
     } catch (err) {
       console.error(err);
       setMessage("Failed to get auth URL");
     }
   }
 
+
+  // ── Step 9: Send AI Prompt ─────────────────────────────────────────────────
+  // Posts the natural language prompt to /api/calendar/ai-prompt/
+  // Django passes it to LLaMA → LLaMA returns a CalendarCommand JSON
+  // → Django executes the command against Google Calendar API
+  // → fetchEvents() re-syncs the FullCalendar widget with the latest data
   async function sendPrompt() {
-    if (!prompt.trim()) return;
+    if (!prompt.trim()) return; // Prevent empty submissions
     setLoading(true);
     setMessage("Processing AI prompt...");
     try {
       const res = await api.post(`/api/calendar/ai-prompt/`, { prompt });
+      // res.data.action → "create" | "update" | "delete" | "list"
+      // res.data.status → "created" | "updated" | "deleted" | "ok"
       setMessage(`Success: ${res.data.action} (${res.data.status})`);
       setPrompt("");
-      await fetchEvents();
+      await fetchEvents(); // Re-fetch to reflect the AI-made change in the calendar
     } catch (err) {
       console.error(err);
       setMessage(err?.response?.data?.detail || "AI prompt error");
@@ -149,14 +257,18 @@ export default function CalendarPage() {
     }
   }
 
+
+  // ── Step 10: Delete Event on Calendar Click ────────────────────────────────
+  // Called when the user clicks an event in the FullCalendar widget
+  // Asks for confirmation, then calls the Django delete endpoint
   async function handleEventClick(clickInfo) {
     const ev = clickInfo.event;
-    if (!confirm(`Delete event "${ev.title}"?`)) return;
+    if (!confirm(`Delete event "${ev.title}"?`)) return; // Native confirm dialog
     setLoading(true);
     try {
       await api.delete(`/api/calendar/events/${ev.id}/delete/`);
       setMessage("Event deleted.");
-      fetchEvents();
+      fetchEvents(); // Re-sync calendar after deletion
     } catch (err) {
       console.error(err);
       setMessage("Delete failed");
@@ -165,6 +277,11 @@ export default function CalendarPage() {
     }
   }
 
+
+  // ── Step 11: Compute Event Days Set ────────────────────────────────────────
+  // A Set of "YYYY-MM-DD" strings for every day that has at least one event
+  // Used by dayCellClassNames to add the .has-event-day CSS class
+  // Memoized so it only recomputes when events[] changes (not on every render)
   const eventDaysSet = useMemo(() => {
     const set = new Set();
     for (const e of events) {
@@ -174,22 +291,38 @@ export default function CalendarPage() {
     return set;
   }, [events]);
 
+
+  // ── Step 12: Compute Upcoming Events List ──────────────────────────────────
+  // Derives the event list shown in the Upcoming panel from the full events[]
+  //
+  // When filterDate is set (user clicked a calendar cell or used the date picker):
+  //   → show only events on that exact date, sorted by time
+  //
+  // When no filter:
+  //   → show 2 most recent past events (for context) + 4 upcoming events
+  //   → combined into a single chronological list
+  //
+  // Memoized — only recomputes when events[] or filterDate changes
   const upcoming = useMemo(() => {
     const now      = new Date();
     const todayStr = ymd(now);
 
+    // ---------------- Filtered View ----------------
     if (filterDate) {
       return events
         .filter((e) => ymd(e.start) === filterDate)
         .sort((a, b) => new Date(a.start) - new Date(b.start));
     }
 
+    // ---------------- Default View: Past 2 + Next 4 ----------------
+    // Past events (most recent first, limited to 2) — reversed back to chronological
     const past = events
       .filter((e) => { const d = ymd(e.start); return d && d < todayStr; })
-      .sort((a, b) => new Date(b.start) - new Date(a.start))
+      .sort((a, b) => new Date(b.start) - new Date(a.start)) // Newest past first
       .slice(0, 2)
-      .reverse();
+      .reverse(); // Put back in chronological order for the list
 
+    // Today + future events (oldest first, limited to 4)
     const todayAndFuture = events
       .filter((e) => { const d = ymd(e.start); return d && d >= todayStr; })
       .sort((a, b) => new Date(a.start) - new Date(b.start))
@@ -198,10 +331,21 @@ export default function CalendarPage() {
     return [...past, ...todayAndFuture];
   }, [events, filterDate]);
 
+
+  // ── Step 13: Preset Prompt Inserter ───────────────────────────────────────
+  // Called by PresetCard onClick — inserts a template string into the textarea
+  // User can then edit the [placeholders] before sending
   function setPreset(text) { setPrompt(text); }
 
+
+  // ── Step 14: FullCalendar Event Content Renderer ──────────────────────────
+  // FullCalendar calls this for each event — controls what renders inside the cell
+  //
+  // dayGridMonth → render the compact .fc-black-bar div (thin horizontal bar)
+  // Other views  → render time + title text (standard FullCalendar behavior)
   function renderEventContent(arg) {
     if (arg.view.type === "dayGridMonth") {
+      // The CSS in calendar.css styles .fc-black-bar as a thin centered bar
       return <div className="fc-black-bar" aria-label={arg.event.title} />;
     }
     return (
@@ -212,10 +356,17 @@ export default function CalendarPage() {
     );
   }
 
+
+  // ── Step 15: Relative Date Label Generator ────────────────────────────────
+  // Returns a human-readable label for a date relative to today
+  // Used for the badge shown on each event card in the Upcoming panel
+  //
+  // Examples: "Today", "Tomorrow", "Yesterday", "In 3 days", "5 days ago"
   function dateLabel(dateStr) {
     const todayStr = ymd(new Date());
     if (!dateStr) return "";
     if (dateStr === todayStr) return "Today";
+    // diff in whole days — positive = future, negative = past
     const diff = (new Date(dateStr) - new Date(todayStr)) / (1000 * 60 * 60 * 24);
     if (diff === 1)  return "Tomorrow";
     if (diff === -1) return "Yesterday";
@@ -223,6 +374,8 @@ export default function CalendarPage() {
     return `In ${Math.round(diff)} days`;
   }
 
+
+  // ── Step 16: Render ────────────────────────────────────────────────────────
   return (
     <SideBarLayout>
       <div className="w-full h-[calc(100vh-24px)] flex flex-col overflow-hidden">
@@ -238,7 +391,8 @@ export default function CalendarPage() {
             </p>
           </div>
 
-          {/* ── Always visible — no permission gate ── */}
+          {/* Connect button — visible to everyone (no RBAC gate needed here)
+              Clicking triggers the Google OAuth2 flow via handleConnect()   */}
           <div className="shrink-0 flex items-center gap-2">
             <button
               onClick={handleConnect}
@@ -249,7 +403,11 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* ── Message banner ── */}
+
+        {/* ── Message Banner ──
+            Shown when message state is non-empty
+            Red styling for errors/failures, green for success
+            Uses string matching on "error"/"failed" keywords for color   */}
         {message ? (
           <div
             className={[
@@ -264,13 +422,19 @@ export default function CalendarPage() {
           </div>
         ) : null}
 
-        {/* ── Main grid ── */}
+
+        {/* ── Main Grid ──
+            Layout:
+             - 2 rows if canExecute (calendar+upcoming + AI prompt)
+             - 1 row if not (calendar+upcoming only)
+            grid-rows changes dynamically so the layout collapses cleanly
+            when the AI panel is hidden                                    */}
         <div className={`flex-1 min-h-0 grid ${canExecute ? "grid-rows-[1fr_auto]" : "grid-rows-[1fr]"} gap-4`}>
 
-          {/* Top row: calendar widget + upcoming panel */}
+          {/* ── Top Row: Mini Calendar + Upcoming Panel ── */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0">
 
-            {/* ── Mini calendar ── */}
+            {/* ── Mini Calendar Panel (4/12 columns on lg) ── */}
             <div className="lg:col-span-4 rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-0">
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div className="text-sm font-semibold text-slate-900">Calendar</div>
@@ -280,42 +444,56 @@ export default function CalendarPage() {
               </div>
 
               <div className="p-3">
+                {/* .fc-apple-widget wrapper applies all the CSS overrides from calendar.css */}
                 <div className="fc-apple-widget">
                   <FullCalendar
                     plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                     initialView="dayGridMonth"
+                    // Toolbar: only prev/next arrows + centered month title
+                    // No view switcher (right: "") — keeps widget minimal
                     headerToolbar={{ left: "prev,next", center: "title", right: "" }}
-                    fixedWeekCount={true}
-                    showNonCurrentDates={true}
+                    fixedWeekCount={true}      // Always 6 rows → consistent widget height
+                    showNonCurrentDates={true} // Show greyed-out prev/next month days
                     dayHeaders={true}
                     weekends={true}
                     events={events}
                     ref={calendarRef}
                     height="auto"
                     eventDisplay="block"
+                    // Clicking an event → confirm delete dialog
                     eventClick={handleEventClick}
+                    // Add .has-event-day class to cells that have events
+                    // CSS in calendar.css gives these cells a subtle background tint
                     dayCellClassNames={(arg) =>
                       eventDaysSet.has(arg.dateStr) ? ["has-event-day"] : []
                     }
+                    // Clicking a date cell → toggle filterDate
+                    // If the same date is clicked again → clear the filter
                     dateClick={(arg) => {
                       setFilterDate((prev) =>
                         prev === arg.dateStr ? "" : arg.dateStr
                       );
                     }}
+                    // Sets data-fc-tooltip on each event element
+                    // The CSS ::after rule in calendar.css reads this to show a tooltip
                     eventDidMount={(info) => {
                       info.el.setAttribute("data-fc-tooltip", info.event.title);
                     }}
+                    // Custom renderer: black bar in month view, time+title in other views
                     eventContent={renderEventContent}
                   />
                 </div>
               </div>
             </div>
 
-            {/* ── Upcoming panel ── */}
+
+            {/* ── Upcoming Events Panel (8/12 columns on lg) ── */}
             <div className="lg:col-span-8 rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-0 flex flex-col">
 
+              {/* Panel header: dynamic title + date filter controls */}
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0 gap-3 flex-wrap">
                 <div className="text-sm font-semibold text-slate-900">
+                  {/* Title changes to show the filtered date when a filter is active */}
                   {filterDate ? (
                     <span>
                       Events on{" "}
@@ -332,6 +510,7 @@ export default function CalendarPage() {
                   )}
                 </div>
 
+                {/* Date filter input + clear button + result count */}
                 <div className="flex items-center gap-2">
                   <input
                     type="date"
@@ -339,6 +518,7 @@ export default function CalendarPage() {
                     onChange={(e) => setFilterDate(e.target.value)}
                     className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-300 transition"
                   />
+                  {/* Clear button only shown when a filter is active */}
                   {filterDate && (
                     <button
                       onClick={() => setFilterDate("")}
@@ -351,8 +531,12 @@ export default function CalendarPage() {
                 </div>
               </div>
 
+              {/* Scrollable event list */}
               <div className="p-4 space-y-3 overflow-auto min-h-0">
                 {upcoming.length === 0 ? (
+                  // ── Empty State ──
+                  // Message adapts based on whether a filter is active or not
+                  // CTA message also changes based on canExecute permission
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center">
                     <div className="text-sm font-semibold text-slate-900">
                       {filterDate ? "No events on this date" : "No upcoming meetings"}
@@ -366,10 +550,11 @@ export default function CalendarPage() {
                     </div>
                   </div>
                 ) : (
+                  // ── Event Cards ──
                   upcoming.map((e) => {
                     const when    = fmtTimeRange(e.start, e.end);
                     const dayStr  = ymd(e.start);
-                    const label   = dateLabel(dayStr);
+                    const label   = dateLabel(dayStr);       // "Today" / "In 3 days" / etc.
                     const isToday = dayStr === ymd(new Date());
                     const isPast  = dayStr < ymd(new Date());
 
@@ -378,27 +563,34 @@ export default function CalendarPage() {
                         key={e.id}
                         className={[
                           "rounded-2xl border px-4 py-3 hover:shadow-md transition",
+                          // Three visual states: today (indigo), past (muted), future (white)
                           isToday
                             ? "border-indigo-200 bg-indigo-50/40"
                             : isPast
-                            ? "border-slate-100 bg-slate-50/60 opacity-70"
+                            ? "border-slate-100 bg-slate-50/60 opacity-70" // Dimmed for past
                             : "border-slate-200 bg-white",
                         ].join(" ")}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
+                            {/* Event title */}
                             <div className="text-sm font-semibold text-slate-900 truncate">
                               {e.title}
                             </div>
+                            {/* Time range — empty space placeholder if no time */}
                             <div className="mt-1 text-xs text-slate-500">
                               {when ? `🕒 ${when}` : " "}
                             </div>
+                            {/* Location or conference platform (Google Meet, Zoom, etc.)
+                                Reads from conferenceData first, then location field       */}
                             <div className="mt-1 text-xs text-slate-500 truncate">
                               {e.extendedProps?.conferenceData?.conferenceSolution?.name ||
                                 e.extendedProps?.location ||
                                 " "}
                             </div>
                           </div>
+
+                          {/* Relative date badge: Today (indigo) / past (grey) / future (green) */}
                           <span
                             className={[
                               "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ring-1",
@@ -420,7 +612,10 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          {/* ── EXECUTE gate: only the AI Prompt section ── */}
+
+          {/* ── AI Prompt Panel (calendar:execute permission gate) ──
+              Only rendered if the user's role has calendar:execute permission
+              The grid layout collapses to 1 row automatically when this is hidden */}
           {canExecute && (
             <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
@@ -431,6 +626,7 @@ export default function CalendarPage() {
                   </div>
                 </div>
 
+                {/* Send button — disabled during loading or when prompt is empty */}
                 <button
                   onClick={sendPrompt}
                   disabled={loading || !prompt.trim()}
@@ -441,6 +637,8 @@ export default function CalendarPage() {
               </div>
 
               <div className="p-4 grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+
+                {/* Textarea (7/12 columns on xl) */}
                 <div className="xl:col-span-7">
                   <textarea
                     value={prompt}
@@ -451,7 +649,12 @@ export default function CalendarPage() {
                   />
                 </div>
 
+                {/* Preset Cards (5/12 columns on xl, 3 columns on md) ──
+                    Each card inserts a template prompt into the textarea
+                    User edits the [placeholder] parts before hitting Send    */}
                 <div className="xl:col-span-5 grid grid-cols-1 md:grid-cols-3 xl:grid-cols-1 gap-3">
+
+                  {/* Event preset */}
                   <PresetCard
                     title="Event"
                     description='Template: "Create event on ..."'
@@ -468,6 +671,7 @@ export default function CalendarPage() {
                     }
                   />
 
+                  {/* Meeting preset */}
                   <PresetCard
                     title="Meeting"
                     description='Template: "There is a meeting..."'
@@ -490,6 +694,7 @@ export default function CalendarPage() {
                     }
                   />
 
+                  {/* Reminder preset */}
                   <PresetCard
                     title="Reminder"
                     description="Quick reminder"

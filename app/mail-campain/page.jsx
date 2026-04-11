@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import SideBarLayout from "../components/Side_bar";
-import { usePermissions } from "../hooks/usePermissions"; // ← import
+import { usePermissions } from "../hooks/usePermissions";
 
 const API_BASE = "http://127.0.0.1:8000/api/mail";
+
+const PAGE_SIZE = 8; // ← change to show more/fewer campaigns per page
 
 function getAccessToken() {
   return typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
@@ -62,6 +64,91 @@ async function apiDelete(path) {
   }
 }
 
+// ─── Pagination ───────────────────────────────────────────────────────────────
+function Pagination({ page, totalPages, total, onChange }) {
+  if (totalPages <= 1) return null;
+
+  function getPages() {
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      return pages;
+    }
+    pages.push(1);
+    if (page > 4) pages.push("…");
+    const start = Math.max(2, page - 1);
+    const end   = Math.min(totalPages - 1, page + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (page < totalPages - 3) pages.push("…");
+    pages.push(totalPages);
+    return pages;
+  }
+
+  const btnBase     = "h-9 min-w-[36px] px-2 rounded-xl text-sm font-medium transition flex items-center justify-center";
+  const btnActive   = "bg-indigo-600 text-white shadow-sm";
+  const btnInactive = "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50";
+  const btnDisabled = "bg-white border border-slate-200 text-slate-300 cursor-not-allowed";
+
+  const rangeStart = (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd   = Math.min(page * PAGE_SIZE, total);
+
+  return (
+    <div className="flex items-center justify-between gap-4 px-6 py-4 border-t border-slate-200 bg-white shrink-0">
+      {/* Range label */}
+      <span className="text-xs text-slate-500 tabular-nums">
+        <span className="font-semibold text-slate-700">{rangeStart}–{rangeEnd}</span>
+        {" "}of{" "}
+        <span className="font-semibold text-slate-700">{total}</span> campaigns
+      </span>
+
+      {/* Controls */}
+      <div className="flex items-center gap-1.5">
+        {/* Prev */}
+        <button
+          onClick={() => onChange(page - 1)}
+          disabled={page === 1}
+          className={`${btnBase} ${page === 1 ? btnDisabled : btnInactive}`}
+          aria-label="Previous page"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+            <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {/* Page numbers */}
+        {getPages().map((p, idx) =>
+          p === "…" ? (
+            <span key={`ellipsis-${idx}`} className="h-9 w-9 flex items-center justify-center text-slate-400 text-sm select-none">
+              …
+            </span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onChange(p)}
+              className={`${btnBase} ${p === page ? btnActive : btnInactive}`}
+              aria-current={p === page ? "page" : undefined}
+            >
+              {p}
+            </button>
+          )
+        )}
+
+        {/* Next */}
+        <button
+          onClick={() => onChange(page + 1)}
+          disabled={page === totalPages}
+          className={`${btnBase} ${page === totalPages ? btnDisabled : btnInactive}`}
+          aria-label="Next page"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+            <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StatusBadge({ hasDraft, recipientCount }) {
   if (hasDraft && recipientCount > 0)
     return (
@@ -100,15 +187,13 @@ function Modal({ children }) {
 export default function CampaignsPage() {
   const router = useRouter();
 
-  // ── permissions ────────────────────────────────────────────────────────────
   const { hasPermission, loading: permLoading } = usePermissions();
 
-  const canCreate = hasPermission("bulk_mail", "create");  // + New Campaign button + modal
-  const canUpdate = hasPermission("bulk_mail", "update");  // Rename, Edit Draft, People
-  const canDelete = hasPermission("bulk_mail", "delete");  // Delete button
-  const canSend   = hasPermission("bulk_mail", "execute"); // Send button
+  const canCreate = hasPermission("bulk_mail", "create");
+  const canUpdate = hasPermission("bulk_mail", "update");
+  const canDelete = hasPermission("bulk_mail", "delete");
+  const canSend   = hasPermission("bulk_mail", "execute");
 
-  // ── state ──────────────────────────────────────────────────────────────────
   const [campaigns, setCampaigns]         = useState([]);
   const [loading, setLoading]             = useState(true);
   const [globalError, setGlobalError]     = useState("");
@@ -121,14 +206,28 @@ export default function CampaignsPage() {
   const [renameName, setRenameName]       = useState("");
   const [renameLoading, setRenameLoading] = useState(false);
 
-  // per-row send state: { [id]: { loading, msg, error } }
   const [sendState, setSendState]         = useState({});
+
+  // ── pagination ────────────────────────────────────────────────────────────
+  const [page, setPage] = useState(1);
+
+  const totalPages = Math.max(1, Math.ceil(campaigns.length / PAGE_SIZE));
+
+  const pagedCampaigns = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return campaigns.slice(start, start + PAGE_SIZE);
+  }, [campaigns, page]);
+
+  function handlePageChange(p) {
+    setPage(Math.min(Math.max(1, p), totalPages));
+  }
 
   const load = async () => {
     setLoading(true);
     setGlobalError("");
     try {
       setCampaigns(await apiGet("/campaigns/"));
+      setPage(1); // reset to first page on reload
     } catch (e) {
       setGlobalError(e.message);
     } finally {
@@ -145,7 +244,7 @@ export default function CampaignsPage() {
       await apiPost("/campaigns/", { name: createName.trim() });
       setShowCreate(false);
       setCreateName("");
-      load();
+      await load(); // load() already resets to page 1
     } catch (e) {
       setGlobalError(e.message);
     } finally {
@@ -171,7 +270,13 @@ export default function CampaignsPage() {
     if (!confirm(`Delete "${c.name}" and all its recipients? This cannot be undone.`)) return;
     try {
       await apiDelete(`/campaigns/${c.id}/`);
-      load();
+      // shrink page if last item on current page was deleted
+      setCampaigns((prev) => {
+        const next = prev.filter((x) => x.id !== c.id);
+        const newTotal = Math.max(1, Math.ceil(next.length / PAGE_SIZE));
+        setPage((p) => Math.min(p, newTotal));
+        return next;
+      });
     } catch (e) {
       setGlobalError(e.message);
     }
@@ -206,7 +311,6 @@ export default function CampaignsPage() {
     }
   };
 
-  // Whether a row has ANY visible action button — if not, skip the actions cell
   const anyRowAction = canUpdate || canDelete || canSend;
 
   return (
@@ -214,7 +318,7 @@ export default function CampaignsPage() {
       <div className="w-full h-[calc(100vh-40px)] rounded-2xl border border-slate-200 bg-white overflow-hidden flex flex-col">
 
         {/* Header */}
-        <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-slate-200">
+        <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-slate-200 shrink-0">
           <div>
             <h1 className="text-xl md:text-2xl font-semibold text-slate-900">Email Campaigns</h1>
             <p className="mt-1 text-sm text-slate-500">
@@ -222,7 +326,6 @@ export default function CampaignsPage() {
             </p>
           </div>
 
-          {/* ── CREATE gate: + New Campaign button ── */}
           {canCreate && (
             <button
               onClick={() => { setCreateName(""); setShowCreate(true); }}
@@ -234,12 +337,13 @@ export default function CampaignsPage() {
         </div>
 
         {globalError && (
-          <div className="mx-6 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mx-6 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shrink-0">
             {globalError}
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-6 py-6 bg-slate-50">
+        {/* Scrollable campaign list */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 bg-slate-50 min-h-0">
           <div className="max-w-4xl mx-auto space-y-4">
 
             {loading || permLoading ? (
@@ -256,7 +360,7 @@ export default function CampaignsPage() {
               </div>
 
             ) : (
-              campaigns.map((c) => {
+              pagedCampaigns.map((c) => {
                 const ss = sendState[c.id] || {};
                 return (
                   <div key={c.id} className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
@@ -273,11 +377,9 @@ export default function CampaignsPage() {
                         </p>
                       </div>
 
-                      {/* Only render the actions group if user has at least one action perm */}
                       {anyRowAction && (
                         <div className="shrink-0 flex flex-wrap gap-2">
 
-                          {/* ── UPDATE gate: Rename, Edit Draft, People ── */}
                           {canUpdate && (
                             <>
                               <button
@@ -301,7 +403,6 @@ export default function CampaignsPage() {
                             </>
                           )}
 
-                          {/* ── DELETE gate: Delete button ── */}
                           {canDelete && (
                             <button
                               onClick={() => handleDelete(c)}
@@ -311,7 +412,6 @@ export default function CampaignsPage() {
                             </button>
                           )}
 
-                          {/* ── EXECUTE gate: Send button ── */}
                           {canSend && (
                             <button
                               onClick={() => handleSend(c)}
@@ -342,9 +442,20 @@ export default function CampaignsPage() {
             )}
           </div>
         </div>
+
+        {/* Pagination — pinned to the bottom of the card */}
+        {!loading && !permLoading && campaigns.length > 0 && (
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={campaigns.length}
+            onChange={handlePageChange}
+          />
+        )}
+
       </div>
 
-      {/* ── CREATE gate: Create modal ── */}
+      {/* Create modal */}
       {canCreate && showCreate && (
         <Modal>
           <p className="text-lg font-semibold text-slate-900 mb-1">New Campaign</p>
@@ -378,7 +489,7 @@ export default function CampaignsPage() {
         </Modal>
       )}
 
-      {/* ── UPDATE gate: Rename modal ── */}
+      {/* Rename modal */}
       {canUpdate && renaming && (
         <Modal>
           <p className="text-lg font-semibold text-slate-900 mb-1">Rename Campaign</p>

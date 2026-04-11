@@ -8,10 +8,8 @@ import { usePermissions } from "../hooks/usePermissions";
 // ─── ↓ INCREASE SIZE HERE to change the max upload limit ───────────────────
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MiB  ← change this number
 // ───────────────────────────────────────────────────────────────────────────
-// Examples:
-//   5 MiB  →  5 * 1024 * 1024
-//   10 MiB → 10 * 1024 * 1024
-//   20 MiB → 20 * 1024 * 1024
+
+const PAGE_SIZE = 6; // ← change to show more/fewer rows per page
 
 function formatBytes(bytes) {
   if (!bytes) return "0 B";
@@ -60,10 +58,95 @@ function Pill({ children, tone = "slate" }) {
   );
 }
 
+// ─── Pagination ───────────────────────────────────────────────────────────────
+function Pagination({ page, totalPages, onChange }) {
+  if (totalPages <= 1) return null;
+
+  // Build page number array with ellipsis: [1, …, 4, 5, 6, …, 12]
+  function getPages() {
+    const pages = [];
+    if (totalPages <= 7) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      return pages;
+    }
+    pages.push(1);
+    if (page > 4) pages.push("…");
+    const start = Math.max(2, page - 1);
+    const end   = Math.min(totalPages - 1, page + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (page < totalPages - 3) pages.push("…");
+    pages.push(totalPages);
+    return pages;
+  }
+
+  const btnBase =
+    "h-9 min-w-[36px] px-2 rounded-xl text-sm font-medium transition flex items-center justify-center";
+  const btnActive =
+    "bg-indigo-600 text-white shadow-sm";
+  const btnInactive =
+    "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50";
+  const btnDisabled =
+    "bg-white border border-slate-200 text-slate-300 cursor-not-allowed";
+
+  return (
+    <div className="flex items-center justify-between gap-4 px-5 py-4 border-t border-slate-100">
+      {/* Left: range info */}
+      <span className="text-xs text-slate-500 tabular-nums">
+        Page <span className="font-semibold text-slate-700">{page}</span> of{" "}
+        <span className="font-semibold text-slate-700">{totalPages}</span>
+      </span>
+
+      {/* Right: controls */}
+      <div className="flex items-center gap-1.5">
+        {/* Prev */}
+        <button
+          onClick={() => onChange(page - 1)}
+          disabled={page === 1}
+          className={`${btnBase} ${page === 1 ? btnDisabled : btnInactive}`}
+          aria-label="Previous page"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+            <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {/* Page numbers */}
+        {getPages().map((p, idx) =>
+          p === "…" ? (
+            <span key={`ellipsis-${idx}`} className="h-9 w-9 flex items-center justify-center text-slate-400 text-sm">
+              …
+            </span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onChange(p)}
+              className={`${btnBase} ${p === page ? btnActive : btnInactive}`}
+              aria-current={p === page ? "page" : undefined}
+            >
+              {p}
+            </button>
+          )
+        )}
+
+        {/* Next */}
+        <button
+          onClick={() => onChange(page + 1)}
+          disabled={page === totalPages}
+          className={`${btnBase} ${page === totalPages ? btnDisabled : btnInactive}`}
+          aria-label="Next page"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+            <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── File Size Warning Modal ──────────────────────────────────────────────────
 function FileSizeWarningModal({ fileName, size, onClose }) {
-  // Human-readable version of MAX_FILE_SIZE for the warning message
-  const limitLabel = formatBytes(MAX_FILE_SIZE); // auto-updates when you change MAX_FILE_SIZE
+  const limitLabel = formatBytes(MAX_FILE_SIZE);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
@@ -87,9 +170,8 @@ function FileSizeWarningModal({ fileName, size, onClose }) {
         <div className="rounded-xl bg-red-50 border border-red-100 px-4 py-3 mb-5">
           <p className="text-sm text-red-700 leading-relaxed">
             <span className="font-semibold break-all">{fileName}</span>
-            {" "}is{" "}
-            <span className="font-semibold">{formatBytes(size)}</span>
-            , which exceeds the {limitLabel} limit. Please compress or choose a smaller file.
+            {" "}is <span className="font-semibold">{formatBytes(size)}</span>,
+            which exceeds the {limitLabel} limit. Please compress or choose a smaller file.
           </p>
         </div>
 
@@ -287,7 +369,8 @@ export default function FileUploadDashboard() {
   const [initialLoading, setInitialLoading]         = useState(true);
   const [embeddingLoadingId, setEmbeddingLoadingId] = useState(null);
   const [previewDoc, setPreviewDoc]                 = useState(null);
-  const [sizeWarnModal, setSizeWarnModal]           = useState(null); // { fileName, size }
+  const [sizeWarnModal, setSizeWarnModal]           = useState(null);
+  const [page, setPage]                             = useState(1);
   const inputRef = useRef(null);
 
   const [user, setUser] = useState(null);
@@ -332,18 +415,28 @@ export default function FileUploadDashboard() {
     loadFiles();
   }, []);
 
-  // ── upload — no rename, just size check then direct upload ───────────────
+  // ── pagination derived values ─────────────────────────────────────────────
+  const totalPages  = Math.max(1, Math.ceil(files.length / PAGE_SIZE));
+  const pagedFiles  = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return files.slice(start, start + PAGE_SIZE);
+  }, [files, page]);
+
+  // Reset to page 1 whenever a new file is added (it lands at the top)
+  function handlePageChange(p) {
+    setPage(Math.min(Math.max(1, p), totalPages));
+  }
+
+  // ── upload ────────────────────────────────────────────────────────────────
   async function uploadToBackend(fileObj) {
     const token = getAccessToken();
     if (!token) { console.error("No access token"); return null; }
 
-    // Size gate — shows custom warning modal, then cancels this file
     if (fileObj.size > MAX_FILE_SIZE) {
       setSizeWarnModal({ fileName: fileObj.name, size: fileObj.size });
-      return null; // upload cancelled for this file
+      return null;
     }
 
-    // Direct upload — no rename prompt
     const formData = new FormData();
     formData.append("file", fileObj);
     formData.append("original_filename", fileObj.name);
@@ -375,6 +468,7 @@ export default function FileUploadDashboard() {
             fileUrl: result.file_url,
             uploadedToAI: result.is_embedded ?? false,
           }, ...prev]);
+          setPage(1); // jump to first page so user sees the new file immediately
         }
       }
     } finally {
@@ -397,7 +491,13 @@ export default function FileUploadDashboard() {
       body: JSON.stringify({ id }),
     });
     if (!res.ok) { console.error("Delete failed"); return; }
-    setFiles((prev) => prev.filter((f) => f.id !== id));
+    setFiles((prev) => {
+      const next = prev.filter((f) => f.id !== id);
+      // If deleting the last item on the current page, go back one page
+      const newTotalPages = Math.max(1, Math.ceil(next.length / PAGE_SIZE));
+      setPage((p) => Math.min(p, newTotalPages));
+      return next;
+    });
   }
 
   async function handleUploadToAI(id, alreadyEmbedded) {
@@ -426,11 +526,14 @@ export default function FileUploadDashboard() {
   const username       = user?.username || "You";
   const showActionsCol = canDelete || canEmbed;
 
+  // Row range label e.g. "1 – 6 of 14"
+  const rangeStart = files.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd   = Math.min(page * PAGE_SIZE, files.length);
+
   return (
     <SideBarLayout>
       {previewDoc && <FilePreviewModal doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
 
-      {/* Custom size-too-large warning modal */}
       {sizeWarnModal && (
         <FileSizeWarningModal
           fileName={sizeWarnModal.fileName}
@@ -481,7 +584,7 @@ export default function FileUploadDashboard() {
                   <div className="min-w-0">
                     <div className="text-base font-semibold text-slate-900">Drag & drop files here</div>
                     <div className="mt-1 text-sm text-slate-500">or click the button to browse from your device.</div>
-                    {/* ↓ INCREASE SIZE HERE — update MAX_FILE_SIZE at the top of this file, this label updates automatically */}
+                    {/* ↓ INCREASE SIZE HERE — update MAX_FILE_SIZE at the top, label auto-updates */}
                     <div className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
                       <svg className="h-3.5 w-3.5 text-amber-500 shrink-0" viewBox="0 0 24 24" fill="none">
                         <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
@@ -530,9 +633,15 @@ export default function FileUploadDashboard() {
 
         {/* Files table */}
         <div className={`${canUpload ? "mt-6" : ""} rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden`}>
+
+          {/* Table header bar */}
           <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
             <div className="text-base font-semibold text-slate-900">Uploaded Files</div>
-            <div className="text-sm text-slate-500">Showing {files.length} files</div>
+            {files.length > 0 && (
+              <div className="text-sm text-slate-500 tabular-nums">
+                {rangeStart}–{rangeEnd} of {files.length}
+              </div>
+            )}
           </div>
 
           <div className="overflow-x-auto">
@@ -573,7 +682,7 @@ export default function FileUploadDashboard() {
                     </td>
                   </tr>
                 ) : (
-                  files.map((f) => {
+                  pagedFiles.map((f) => {
                     const isEmbedded    = !!f.uploadedToAI;
                     const isLoading     = embeddingLoadingId === f.id;
                     const embedDisabled = isEmbedded || isLoading;
@@ -666,7 +775,15 @@ export default function FileUploadDashboard() {
               </tbody>
             </table>
           </div>
-          <div className="px-5 py-4 bg-white" />
+
+          {/* Pagination — rendered below the table */}
+          {!initialLoading && !permLoading && files.length > 0 && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              onChange={handlePageChange}
+            />
+          )}
         </div>
       </div>
     </SideBarLayout>

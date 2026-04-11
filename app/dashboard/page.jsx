@@ -12,7 +12,7 @@ const STATUS = {
 };
 
 function statusTitle(status) {
-  if (status === STATUS.TASK) return "To do";
+  if (status === STATUS.TASK)        return "To do";
   if (status === STATUS.IN_PROGRESS) return "In progress";
   return "Done";
 }
@@ -47,8 +47,7 @@ function AssignedUserPill({ user }) {
   );
 }
 
-/* ──────────────── ICONS ──────────────── */
-
+/* ── Icons ── */
 function IconPlus({ className = "" }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none">
@@ -70,32 +69,25 @@ function IconTrash({ className = "" }) {
     <svg className={className} viewBox="0 0 24 24" fill="none">
       <path
         d="M4 7h16M10 11v7m4-7v7M9 7V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
       />
     </svg>
   );
 }
 
-/** Clipboard with checklist lines — represents "To do" */
 function IconTodo({ className = "" }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none">
       <rect x="8" y="2" width="8" height="4" rx="1" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
       <path
         d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
+        stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"
       />
       <path d="M9 12h6M9 16h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
 
-/** Clock face — represents "In Progress" */
 function IconInProgress({ className = "" }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none">
@@ -105,7 +97,6 @@ function IconInProgress({ className = "" }) {
   );
 }
 
-/** Check-circle — represents "Done" */
 function IconDone({ className = "" }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none">
@@ -115,33 +106,26 @@ function IconDone({ className = "" }) {
   );
 }
 
-/* Map status → icon component */
 function StatusIcon({ status, className = "" }) {
   if (status === STATUS.TASK)        return <IconTodo       className={className} />;
   if (status === STATUS.IN_PROGRESS) return <IconInProgress className={className} />;
   return                                    <IconDone       className={className} />;
 }
 
-/* Colour accent per column */
 function columnAccent(col) {
   if (col === STATUS.TASK)        return "text-slate-500";
   if (col === STATUS.IN_PROGRESS) return "text-blue-500";
   return "text-emerald-500";
 }
 
-/* ──────────────── HELPERS ──────────────── */
-
 function matchesQuery(task, q) {
   if (!q) return true;
   const hay = [task?.title, task?.short_description, task?.full_description, task?.assigned_to?.username]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+    .filter(Boolean).join(" ").toLowerCase();
   return hay.includes(q.toLowerCase());
 }
 
-/* ──────────────── PAGE ──────────────── */
-
+/* ── Page ── */
 export default function TasksBoardPage() {
   const { hasPermission, loading: permLoading } = usePermissions();
 
@@ -149,9 +133,9 @@ export default function TasksBoardPage() {
   const canUpdate = hasPermission("tasks", "update");
   const canDelete = hasPermission("tasks", "delete");
 
-  const [board, setBoard]       = useState({ TASK: [], IN_PROGRESS: [], FINISHED: [] });
-  const [loading, setLoading]   = useState(true);
-  const [err, setErr]           = useState("");
+  const [board, setBoard]     = useState({ TASK: [], IN_PROGRESS: [], FINISHED: [] });
+  const [loading, setLoading] = useState(true);
+  const [err, setErr]         = useState("");
 
   const [users, setUsers]               = useState([]);
   const [usersLoading, setUsersLoading] = useState(true);
@@ -164,18 +148,13 @@ export default function TasksBoardPage() {
   const [query, setQuery] = useState("");
 
   const [form, setForm] = useState({
-    title: "",
-    short_description: "",
-    full_description: "",
-    deadline: "",
-    assigned_to: "",
+    title: "", short_description: "", full_description: "", deadline: "", assigned_to: "",
   });
 
   const columns = useMemo(() => [STATUS.TASK, STATUS.IN_PROGRESS, STATUS.FINISHED], []);
 
   async function loadBoard() {
-    setErr("");
-    setLoading(true);
+    setErr(""); setLoading(true);
     try {
       const data = await apiFetch("/api/tasks/tasks/board/");
       setBoard({
@@ -191,61 +170,44 @@ export default function TasksBoardPage() {
   }
 
   async function loadUsers() {
-    setUsersErr("");
-    setUsersLoading(true);
+    setUsersErr(""); setUsersLoading(true);
     try {
       const data = await apiFetch("/authapp/list_users/");
       setUsers(Array.isArray(data) ? data : []);
     } catch (e) {
-      setUsers([]);
-      setUsersErr(e.message || "Failed to load users");
+      setUsers([]); setUsersErr(e.message || "Failed to load users");
     } finally {
       setUsersLoading(false);
     }
   }
 
-  useEffect(() => {
-    loadBoard();
-    loadUsers();
-  }, []);
+  useEffect(() => { loadBoard(); loadUsers(); }, []);
 
   async function moveTask(task, newStatus) {
     try {
-      await apiFetch(`/api/tasks/tasks/${task.id}/update/`, {
-        method: "PATCH",
-        body: { status: newStatus },
-      });
+      await apiFetch(`/api/tasks/tasks/${task.id}/update/`, { method: "PATCH", body: { status: newStatus } });
       await loadBoard();
-    } catch (e) {
-      alert(e.message || "Failed to update task");
-    }
+    } catch (e) { alert(e.message || "Failed to update task"); }
   }
 
   async function deleteTask(task) {
     try {
       await apiFetch(`/api/tasks/tasks/${task.id}/delete/`, { method: "DELETE" });
       await loadBoard();
-    } catch (e) {
-      alert(e.message || "Failed to delete task");
-    }
+    } catch (e) { alert(e.message || "Failed to delete task"); }
   }
 
   function openCreateModal() {
     setCreateErr("");
-    const d = new Date();
-    d.setHours(d.getHours() + 1);
+    const d = new Date(); d.setHours(d.getHours() + 1);
     setForm((p) => ({ ...p, deadline: p.deadline || toDatetimeLocalValue(d) }));
     setOpenCreate(true);
   }
 
-  function closeCreateModal() {
-    if (creating) return;
-    setOpenCreate(false);
-  }
+  function closeCreateModal() { if (creating) return; setOpenCreate(false); }
 
   async function submitCreate(e) {
-    e.preventDefault();
-    setCreateErr("");
+    e.preventDefault(); setCreateErr("");
     const deadlineISO = datetimeLocalToISO(form.deadline);
     if (!deadlineISO)      return setCreateErr("Invalid deadline date/time.");
     if (!form.assigned_to) return setCreateErr("Please select a user to assign.");
@@ -254,11 +216,9 @@ export default function TasksBoardPage() {
       await apiFetch("/api/tasks/tasks/", {
         method: "POST",
         body: {
-          title:             form.title,
-          short_description: form.short_description,
-          full_description:  form.full_description,
-          deadline:          deadlineISO,
-          assigned_to:       Number(form.assigned_to),
+          title: form.title, short_description: form.short_description,
+          full_description: form.full_description, deadline: deadlineISO,
+          assigned_to: Number(form.assigned_to),
         },
       });
       setOpenCreate(false);
@@ -281,12 +241,17 @@ export default function TasksBoardPage() {
 
   return (
     <SideBarLayout>
-      <div className="min-h-[calc(100vh-40px)] w-full rounded-2xl border border-slate-200 bg-white">
+      {/*
+        ┌─────────────────────────────────────────────────────────┐
+        │ Outer card — fixed viewport height, flex column         │
+        │ so the board area fills all remaining space             │
+        └─────────────────────────────────────────────────────────┘
+      */}
+      <div className="h-[calc(100vh-40px)] w-full rounded-2xl border border-slate-200 bg-white flex flex-col overflow-hidden">
 
-        {/* Top bar */}
-        <div className="flex items-center justify-between gap-4 px-6 py-5 border-b border-slate-200">
+        {/* ── Top bar — never scrolls ── */}
+        <div className="shrink-0 flex items-center justify-between gap-4 px-6 py-5 border-b border-slate-200">
           <h1 className="text-xl md:text-2xl font-semibold text-slate-900">Dashboard</h1>
-
           <div className="w-full max-w-md">
             <div className="relative">
               <input
@@ -300,36 +265,45 @@ export default function TasksBoardPage() {
                   type="button"
                   onClick={() => setQuery("")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-800 text-sm"
-                >
-                  ✕
-                </button>
+                >✕</button>
               )}
             </div>
           </div>
         </div>
 
         {err && (
-          <div className="mx-6 mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="shrink-0 mx-6 mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {err}
           </div>
         )}
 
-        {/* Board */}
+        {/* ── Board area — fills remaining height ── */}
         {loading || permLoading ? (
-          <div className="px-6 py-14 text-center text-slate-500">Loading tasks...</div>
+          <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">
+            Loading tasks...
+          </div>
         ) : (
-          <div className="px-6 py-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          /*
+            flex-1 + overflow-hidden lets the grid fill the remaining card height.
+            Each column is then flex-col with its own overflow-y-auto cards area.
+          */
+          <div className="flex-1 overflow-hidden px-6 py-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 h-full">
               {columns.map((col) => {
                 const count = (filteredBoard[col] || []).length;
 
                 return (
                   <div
                     key={col}
-                    className="rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden"
+                    /*
+                      flex flex-col + overflow-hidden on the column wrapper.
+                      The header is shrink-0 (never shrinks).
+                      The cards div gets flex-1 + overflow-y-auto → independent scroll per column.
+                    */
+                    className="rounded-2xl bg-slate-50 border border-slate-200 flex flex-col overflow-hidden"
                   >
-                    {/* ── Column header ── */}
-                    <div className="px-4 py-4 flex items-center justify-between">
+                    {/* ── Column header — pinned, never scrolls ── */}
+                    <div className="shrink-0 px-4 py-4 flex items-center justify-between border-b border-slate-200">
                       <div className="flex items-center gap-2">
                         <StatusIcon
                           status={col}
@@ -351,19 +325,17 @@ export default function TasksBoardPage() {
                             <IconPlus className="h-5 w-5" />
                           </button>
                         )}
-
                         <button
                           className="h-9 w-9 grid place-items-center rounded-xl bg-transparent text-slate-500 hover:bg-white hover:border hover:border-slate-200 transition"
-                          title="More"
-                          type="button"
+                          title="More" type="button"
                         >
                           <IconDots className="h-5 w-5" />
                         </button>
                       </div>
                     </div>
 
-                    {/* ── Cards ── */}
-                    <div className="px-4 pb-4 space-y-4">
+                    {/* ── Cards — THIS is the scrollable area, independent per column ── */}
+                    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
                       {(filteredBoard[col] || []).length === 0 ? (
                         <div className="rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-8 text-center text-sm text-slate-500">
                           No tasks
@@ -376,15 +348,10 @@ export default function TasksBoardPage() {
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="text-slate-900 font-semibold leading-snug truncate">
-                                  {t.title}
-                                </div>
-                                <div className="text-xs text-slate-500 mt-1 line-clamp-2">
-                                  {t.short_description}
-                                </div>
+                                <div className="text-slate-900 font-semibold leading-snug truncate">{t.title}</div>
+                                <div className="text-xs text-slate-500 mt-1 line-clamp-2">{t.short_description}</div>
                               </div>
 
-                              {/* DELETE: only visible in "To do" column */}
                               {canDelete && col === STATUS.TASK && (
                                 <button
                                   onClick={() => deleteTask(t)}
@@ -406,7 +373,6 @@ export default function TasksBoardPage() {
                               </div>
                             </div>
 
-                            {/* ── Move buttons with icons ── */}
                             {canUpdate && (
                               <div className="mt-4 flex flex-wrap gap-2">
                                 {col !== STATUS.TASK && (
@@ -433,7 +399,7 @@ export default function TasksBoardPage() {
                                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition"
                                   >
                                     <IconDone className="h-3.5 w-3.5" />
-                                    
+                                    Done
                                   </button>
                                 )}
                               </div>
@@ -490,8 +456,7 @@ export default function TasksBoardPage() {
                   value={form.title}
                   onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300"
-                  required
-                  disabled={creating}
+                  required disabled={creating}
                 />
               </div>
 
@@ -501,8 +466,7 @@ export default function TasksBoardPage() {
                   value={form.short_description}
                   onChange={(e) => setForm((p) => ({ ...p, short_description: e.target.value }))}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300"
-                  required
-                  disabled={creating}
+                  required disabled={creating}
                 />
               </div>
 
@@ -512,8 +476,7 @@ export default function TasksBoardPage() {
                   value={form.full_description}
                   onChange={(e) => setForm((p) => ({ ...p, full_description: e.target.value }))}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 min-h-[120px] outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300"
-                  required
-                  disabled={creating}
+                  required disabled={creating}
                 />
               </div>
 
@@ -526,34 +489,27 @@ export default function TasksBoardPage() {
                     min={toDatetimeLocalValue(new Date())}
                     onChange={(e) => setForm((p) => ({ ...p, deadline: e.target.value }))}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300"
-                    required
-                    disabled={creating}
-                    step="60"
+                    required disabled={creating} step="60"
                   />
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Assign to</label>
                   <select
                     value={form.assigned_to}
                     onChange={(e) => setForm((p) => ({ ...p, assigned_to: e.target.value }))}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300"
-                    required
-                    disabled={creating || usersLoading}
+                    required disabled={creating || usersLoading}
                   >
                     <option value="">{usersLoading ? "Loading users..." : "Select a user"}</option>
                     {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.username} ({u.email})
-                      </option>
+                      <option key={u.id} value={u.id}>{u.username} ({u.email})</option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <button
-                type="submit"
-                disabled={creating}
+                type="submit" disabled={creating}
                 className="w-full px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold disabled:opacity-50"
               >
                 {creating ? "Creating..." : "Create Task"}

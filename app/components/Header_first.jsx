@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 export default function Header() {
@@ -12,25 +13,24 @@ export default function Header() {
 
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="h-9 w-9 rounded-xl bg-indigo-600 grid place-items-center shadow-sm shadow-indigo-200 group-hover:bg-indigo-700 transition">
-            <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-          <span className="font-bold text-slate-900 text-lg tracking-tight">Chrono</span>
-        </Link>
-
+        <div className="h-10 w-10 flex items-center justify-center">
+          <Image 
+            src="/vercel.png"
+            alt="Vercel Logo"
+            width={35}
+            height={35}
+            className="object-contain"
+          />
+        </div>
+        <span className="font-bold text-slate-900 text-lg tracking-tight">
+          Chrono
+        </span>
+      </Link>
         {/* Nav */}
         <nav className="hidden md:flex items-center gap-1">
           {[
             { label: "Features", href: "#features" },
-            { label: "API", href: "#api" },
+            { label: "Donation", href: "#donation" },
             { label: "Help", href: "#help" },
           ].map((item) => (
             <a

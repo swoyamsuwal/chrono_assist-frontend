@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { usePermissions } from "../hooks/usePermissions"; // updated
 import {
@@ -129,9 +130,13 @@ export default function SideBarLayout({ children }) {
               ${isOpen ? "justify-start" : "justify-center"}
             `}
           >
-            <div className="h-8 w-8 rounded-lg bg-gray-900 flex items-center justify-center text-white text-sm font-semibold">
-              AI
-            </div>
+            <Image 
+                        src="/vercel.png"
+                        alt="Vercel Logo"
+                        width={35}
+                        height={35}
+                        className="object-contain"
+                      />
             {isOpen && (
               <span className="text-sm font-semibold text-gray-900">
                 Chrono Assist
@@ -183,51 +188,51 @@ export default function SideBarLayout({ children }) {
 
                   return (
                     <li key={item.href}>
-                      <button
-                        type="button"
-                        onClick={() => router.push(item.href)}
+                    <button
+                      type="button"
+                      onClick={() => router.push(item.href)}
+                      className={`
+                        w-full h-12 rounded-xl
+                        transition-colors duration-150
+                        ${
+                          active
+                            ? "bg-[#4F39F6] text-white"
+                            : "text-gray-700 hover:bg-[#4F39F6]/10"
+                        }
+                        ${isOpen ? "px-2" : "px-0"}
+                      `}
+                    >
+                      <span
                         className={`
-                          w-full h-12 rounded-xl
-                          transition-colors duration-150
+                          h-full w-full grid items-center
                           ${
-                            active
-                              ? "bg-gray-900 text-white"
-                              : "text-gray-700 hover:bg-gray-100"
+                            isOpen
+                              ? "grid-cols-[40px_1fr]"
+                              : "grid-cols-1 justify-items-center"
                           }
-                          ${isOpen ? "px-2" : "px-0"}
                         `}
                       >
                         <span
                           className={`
-                            h-full w-full grid items-center
+                            h-10 w-10 rounded-xl grid place-items-center
                             ${
-                              isOpen
-                                ? "grid-cols-[40px_1fr]"
-                                : "grid-cols-1 justify-items-center"
+                              active
+                                ? "bg-[#4F39F6]/90 text-white"
+                                : "text-[#4F39F6]"
                             }
                           `}
                         >
-                          <span
-                            className={`
-                              h-10 w-10 rounded-xl grid place-items-center
-                              ${
-                                active
-                                  ? "bg-gray-800 text-white"
-                                  : "text-gray-500"
-                              }
-                            `}
-                          >
-                            <Icon className="h-4 w-4" />
-                          </span>
-
-                          {isOpen && (
-                            <span className="text-[13px] font-medium text-left">
-                              {item.name}
-                            </span>
-                          )}
+                          <Icon className="h-4 w-4" />
                         </span>
-                      </button>
-                    </li>
+
+                        {isOpen && (
+                          <span className="text-[13px] font-medium text-left">
+                            {item.name}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
                   );
                 })}
             </ul>

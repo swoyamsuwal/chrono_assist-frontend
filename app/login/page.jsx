@@ -1,6 +1,5 @@
 "use client";
-
-import Header from "../components/Header_first";
+import Image from "next/image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -146,17 +145,17 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-indigo-500 grid place-items-center">
-              <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
-                  stroke="currentColor" strokeWidth="2"
-                  strokeLinecap="round" strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-            <span className="text-white font-bold text-lg tracking-tight">Chrono</span>
+          <div className="flex items-center gap-2.5">
+            <Image 
+              src="/vercel.png"
+              alt="Vercel Logo"
+              width={35}
+              height={35}
+              className="object-contain"
+            />
+            <span className="text-white font-bold text-lg tracking-tight">
+              Chrono
+            </span>
           </div>
         </div>
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
 
 export default function RegisterPage() {
@@ -104,15 +105,20 @@ export default function RegisterPage() {
 
         {/* Logo */}
         <div className="relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-indigo-500 grid place-items-center">
-              <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <span className="text-white font-bold text-lg tracking-tight">Chrono</span>
-          </div>
+        <div className="flex items-center gap-3">
+          <Image 
+            src="/vercel.svg"
+            alt="Vercel Logo"
+            width={36}
+            height={36}
+            className="object-contain"
+          />
+
+          <span className="text-white font-bold text-lg tracking-tight">
+            Chrono
+          </span>
         </div>
+      </div>
 
         {/* Center text */}
         <div className="relative z-10">

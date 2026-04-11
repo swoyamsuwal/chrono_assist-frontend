@@ -47,6 +47,8 @@ function AssignedUserPill({ user }) {
   );
 }
 
+/* ──────────────── ICONS ──────────────── */
+
 function IconPlus({ className = "" }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none">
@@ -77,6 +79,58 @@ function IconTrash({ className = "" }) {
   );
 }
 
+/** Clipboard with checklist lines — represents "To do" */
+function IconTodo({ className = "" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <rect x="8" y="2" width="8" height="4" rx="1" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path
+        d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M9 12h6M9 16h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Clock face — represents "In Progress" */
+function IconInProgress({ className = "" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 7v5l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Check-circle — represents "Done" */
+function IconDone({ className = "" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 12l3 3 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/* Map status → icon component */
+function StatusIcon({ status, className = "" }) {
+  if (status === STATUS.TASK)        return <IconTodo       className={className} />;
+  if (status === STATUS.IN_PROGRESS) return <IconInProgress className={className} />;
+  return                                    <IconDone       className={className} />;
+}
+
+/* Colour accent per column */
+function columnAccent(col) {
+  if (col === STATUS.TASK)        return "text-slate-500";
+  if (col === STATUS.IN_PROGRESS) return "text-blue-500";
+  return "text-emerald-500";
+}
+
+/* ──────────────── HELPERS ──────────────── */
+
 function matchesQuery(task, q) {
   if (!q) return true;
   const hay = [task?.title, task?.short_description, task?.full_description, task?.assigned_to?.username]
@@ -85,6 +139,8 @@ function matchesQuery(task, q) {
     .toLowerCase();
   return hay.includes(q.toLowerCase());
 }
+
+/* ──────────────── PAGE ──────────────── */
 
 export default function TasksBoardPage() {
   const { hasPermission, loading: permLoading } = usePermissions();
@@ -272,9 +328,13 @@ export default function TasksBoardPage() {
                     key={col}
                     className="rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden"
                   >
-                    {/* Column header */}
+                    {/* ── Column header ── */}
                     <div className="px-4 py-4 flex items-center justify-between">
                       <div className="flex items-center gap-2">
+                        <StatusIcon
+                          status={col}
+                          className={`h-5 w-5 flex-shrink-0 ${columnAccent(col)}`}
+                        />
                         <div className="text-sm font-semibold text-slate-900">{statusTitle(col)}</div>
                         <div className="text-xs px-2 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600">
                           {count}
@@ -302,7 +362,7 @@ export default function TasksBoardPage() {
                       </div>
                     </div>
 
-                    {/* Cards */}
+                    {/* ── Cards ── */}
                     <div className="px-4 pb-4 space-y-4">
                       {(filteredBoard[col] || []).length === 0 ? (
                         <div className="rounded-xl border border-dashed border-slate-200 bg-white/60 px-4 py-8 text-center text-sm text-slate-500">
@@ -324,7 +384,7 @@ export default function TasksBoardPage() {
                                 </div>
                               </div>
 
-                              {/* ── DELETE: only visible in "To do" column ── */}
+                              {/* DELETE: only visible in "To do" column */}
                               {canDelete && col === STATUS.TASK && (
                                 <button
                                   onClick={() => deleteTask(t)}
@@ -346,30 +406,34 @@ export default function TasksBoardPage() {
                               </div>
                             </div>
 
+                            {/* ── Move buttons with icons ── */}
                             {canUpdate && (
                               <div className="mt-4 flex flex-wrap gap-2">
                                 {col !== STATUS.TASK && (
                                   <button
                                     onClick={() => moveTask(t, STATUS.TASK)}
-                                    className="px-3 py-2 rounded-xl text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 transition"
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 transition"
                                   >
-                                    Send to To do
+                                    <IconTodo className="h-3.5 w-3.5 text-slate-500" />
+                                    To do
                                   </button>
                                 )}
                                 {col !== STATUS.IN_PROGRESS && (
                                   <button
                                     onClick={() => moveTask(t, STATUS.IN_PROGRESS)}
-                                    className="px-3 py-2 rounded-xl text-xs bg-blue-600 hover:bg-blue-700 text-white transition"
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs bg-blue-600 hover:bg-blue-700 text-white transition"
                                   >
+                                    <IconInProgress className="h-3.5 w-3.5" />
                                     In Progress
                                   </button>
                                 )}
                                 {col !== STATUS.FINISHED && (
                                   <button
                                     onClick={() => moveTask(t, STATUS.FINISHED)}
-                                    className="px-3 py-2 rounded-xl text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition"
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition"
                                   >
-                                    Done
+                                    <IconDone className="h-3.5 w-3.5" />
+                                    
                                   </button>
                                 )}
                               </div>
@@ -386,7 +450,7 @@ export default function TasksBoardPage() {
         )}
       </div>
 
-      {/* Create Task Modal */}
+      {/* ── Create Task Modal ── */}
       {openCreate && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/40"
@@ -459,7 +523,7 @@ export default function TasksBoardPage() {
                   <input
                     type="datetime-local"
                     value={form.deadline}
-min={toDatetimeLocalValue(new Date())}
+                    min={toDatetimeLocalValue(new Date())}
                     onChange={(e) => setForm((p) => ({ ...p, deadline: e.target.value }))}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none focus:ring-4 focus:ring-slate-100 focus:border-slate-300"
                     required

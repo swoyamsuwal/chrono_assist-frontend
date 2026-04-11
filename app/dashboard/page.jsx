@@ -387,7 +387,7 @@ export default function TasksBoardPage() {
                                 {col !== STATUS.IN_PROGRESS && (
                                   <button
                                     onClick={() => moveTask(t, STATUS.IN_PROGRESS)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs bg-blue-600 hover:bg-blue-700 text-white transition"
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs bg-[#4F39F6] hover:bg-blue-700 text-white transition"
                                   >
                                     <IconInProgress className="h-3.5 w-3.5" />
                                     In Progress
